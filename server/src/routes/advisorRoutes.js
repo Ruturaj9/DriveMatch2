@@ -189,14 +189,14 @@ router.post("/", async (req, res) => {
     ---------------------------------------------------------- */
     const vehicles = await Vehicle.find(filter)
       .sort(sortOption)
-      .limit(15)
+      .limit(38)
       .select("name brand price fuelType mileage transmission enginePower bodyType performanceScore image");
 
     /* ----------------------------------------------------------
        🔟 CONFIDENCE & FALLBACK
     ---------------------------------------------------------- */
     if (vehicles.length === 0) {
-      const trending = await Vehicle.find({ isTrending: true }).limit(8);
+      const trending = await Vehicle.find({ isTrending: true }).limit(38);
       confidence -= 30;
       reasoning.push("No direct match found. Showing trending vehicles instead.");
       return res.json({

@@ -10,7 +10,7 @@ router.post("/seed", async (req, res) => {
   try {
     if (!Array.isArray(req.body) || req.body.length === 0) {
       return res.status(400).json({
-        message: "Please send an array of vehicles to seed."
+        message: "Please send an array of vehicles to seed.",
       });
     }
 
@@ -18,21 +18,20 @@ router.post("/seed", async (req, res) => {
 
     // Insert vehicles — ignore errors, continue inserting others
     const inserted = await Vehicle.insertMany(req.body, {
-      ordered: false // continues even if some fail (duplicates etc.)
+      ordered: false, // continues even if some fail (duplicates etc.)
     });
 
     res.json({
       message: "Vehicles added successfully!",
-      insertedCount: inserted.length
+      insertedCount: inserted.length,
     });
-
   } catch (err) {
     // Handle duplicate or partial insert errors
     if (err.writeErrors) {
       return res.json({
         message: "Some vehicles inserted (duplicates skipped).",
         insertedCount: err.result?.nInserted || 0,
-        duplicateErrors: err.writeErrors.length
+        duplicateErrors: err.writeErrors.length,
       });
     }
 
@@ -82,7 +81,9 @@ router.get("/", async (req, res) => {
    ========================================================== */
 router.get("/trending", async (req, res) => {
   try {
-    const trendingVehicles = await Vehicle.find({ isTrending: true }).limit(10);
+    const trendingVehicles = await Vehicle.find({ isTrending: true }).limit(
+      300
+    );
     res.json(trendingVehicles);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -139,7 +140,8 @@ function calculateSimilarity(base, cand) {
   if (base.transmission === cand.transmission) score += 5;
   if (base.bodyType === cand.bodyType) score += 5;
 
-  const perfDiff = Math.abs(base.performanceScore - cand.performanceScore) / 100;
+  const perfDiff =
+    Math.abs(base.performanceScore - cand.performanceScore) / 100;
   const ecoDiff = Math.abs(base.ecoScore - cand.ecoScore) / 100;
 
   score += (1 - perfDiff) * 10;
@@ -165,12 +167,12 @@ router.get("/similar/:id", async (req, res) => {
       type: baseVehicle.type,
       price: { $gte: minPrice, $lte: maxPrice },
       fuelType: baseVehicle.fuelType,
-      transmission: baseVehicle.transmission
+      transmission: baseVehicle.transmission,
     })
       .select(
         "name brand type price enginePower torque mileage fuelType transmission performanceScore ecoScore bodyType image"
       )
-      .limit(100);
+      .limit(300);
 
     const scored = candidates.map((vehicle) => ({
       vehicle,
@@ -184,9 +186,8 @@ router.get("/similar/:id", async (req, res) => {
 
     res.json({
       base: baseVehicle,
-      similar: similarTop4
+      similar: similarTop4,
     });
-
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -204,7 +205,6 @@ router.post("/compare", async (req, res) => {
     const vehicles = await Vehicle.find({ _id: { $in: ids } });
 
     res.json({ count: vehicles.length, vehicles });
-
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -41,7 +41,7 @@ router.get("/:vehicleId", async (req, res) => {
   try {
     const reviews = await Review.find({ vehicleId: req.params.vehicleId })
       .sort({ createdAt: -1 })
-      .limit(10);
+      .limit(20);
 
     if (reviews.length === 0) {
       return res.json({ message: "No reviews yet for this vehicle." });
