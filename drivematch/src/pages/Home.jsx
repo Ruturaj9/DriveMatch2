@@ -149,7 +149,7 @@ const Home = () => {
             className="
               flex items-center gap-2 px-4 py-2 
               bg-blue-60 text-white rounded-lg 
-              hover:bg-blue-70 transition
+              hover:bg-blue-70 transition 
             "
           >
             <RefreshCcw size={16} /> Reset

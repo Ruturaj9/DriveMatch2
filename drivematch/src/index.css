@@ -1,8 +1,7 @@
 /* ---------------------------------------
    Tailwind v4
 ---------------------------------------- */
-@tailwind preflight;
-@tailwind utilities;
+@import "tailwindcss";
 
 /* ---------------------------------------
    THEME VARIABLES

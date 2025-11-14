@@ -1,14 +1,13 @@
-import { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { ThemeContext } from "../context/ThemeContext";
-import { Moon, Sun, Menu, X } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 
 const Navbar = () => {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 
-  // Close mobile menu on route change
   useEffect(() => {
     setMenuOpen(false);
   }, [location]);
@@ -22,147 +21,78 @@ const Navbar = () => {
 
   return (
     <nav
-      className={`
-        sticky top-0 z-50 backdrop-blur-lg border-b transition-all duration-300
+      className={`sticky top-0 backdrop-blur-md border-b transition duration-700 ease-in-out
         ${
           theme === "dark"
-            ? "bg-[rgba(10,10,10,0.75)] border-neutral-30"
-            : "bg-[rgba(255,255,255,0.75)] border-neutral-90"
+            ? "bg-black/60 border-neutral-700 shadow-[0_4px_18px_rgba(0,0,0,0.55)]"
+            : "bg-white/70 border-neutral-300 shadow-[0_4px_10px_rgba(0,0,0,0.06)]"
         }
-        shadow-lg
       `}
     >
-      <div className="max-w-7xl mx-auto flex justify-between items-center px-6 md:px-10 py-3">
-
-        {/* Logo */}
+      <div className="max-w-7xl mx-auto flex justify-between items-center ">
+        {/* 🚗 BRAND */}
         <Link
           to="/"
-          className="relative text-2xl md:text-3xl font-bold tracking-tight group"
+          className="text-2xl md:text-3xl font-bold  
+          bg-gradient-to-r from-blue-500 via-sky-400 to-cyan-400 bg-clip-text 
+          hover:opacity-90 transition-opacity px-2 py-1 "
         >
-          <span className="bg-gradient-to-r from-blue-50 via-blue-60 to-purple-60 bg-clip-text text-transparent">
-            DriveMatch
-          </span>
-
-          {/* Glow effect */}
-          <div className="absolute inset-0 blur-md opacity-0 group-hover:opacity-40 transition-all bg-gradient-to-r from-blue-50 via-blue-60 to-purple-60 rounded-lg"></div>
+          DriveMatch
         </Link>
 
-        {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-10">
-
-          {/* Links */}
-          <div className="flex items-center gap-8">
+        {/* 🔗 NAV LINKS + THEME */}
+        <div className="flex items-center gap-6 m-4 p-6">
+          {/* NAVIGATION LINKS */}
+          <div className="flex items-center gap-8 ">
             {navItems.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.path}
                 className={({ isActive }) =>
-                  `
-                    relative font-medium text-[15px] tracking-wide transition-all
-                    ${
-                      isActive
-                        ? "text-blue-60"
-                        : "text-neutral-40 hover:text-blue-60"
-                    }
-                    after:content-[''] after:absolute after:left-0 after:-bottom-[3px]
-                    after:h-[2px] after:bg-blue-60 after:rounded-full after:w-0
-                    hover:after:w-full after:transition-all
+                  `group relative font-medium text-[15px] tracking-wide px-4 py-2 transition-all
+                  ${
+                    isActive
+                      ? "text-red-100"
+                      : "text-neutral-600 hover:text-blue-600"
+                  }
                   `
                 }
               >
                 {item.name}
+
+                {/* UNDERLINE ANIMATION */}
+                <span
+                  className={`
+                    absolute left-1/2 -bottom-3 h-[2px] w-0 bg-blue-600 rounded-full 
+                    transition-all duration-300 
+                    group-hover:w-full group-hover:left-0
+                    ${location.pathname === item.path ? "w-full left-0" : ""}
+                  `}
+                ></span>
               </NavLink>
             ))}
           </div>
 
-          {/* Theme Toggle */}
+          {/* 🌙 / ☀️ THEME TOGGLE */}
           <button
             onClick={toggleTheme}
-            className={`
-              w-10 h-10 flex items-center justify-center rounded-full transition-all border backdrop-blur-md
+            aria-label="Toggle Theme"
+            className={`ml-2 flex items-center justify-center w-10 h-10 rounded-full border transition-all
               ${
                 theme === "dark"
-                  ? "bg-neutral-20 border-neutral-40 hover:bg-neutral-30 hover:border-blue-50"
-                  : "bg-neutral-95 border-neutral-70 hover:bg-neutral-85 hover:border-blue-50"
+                  ? "border-neutral-500 bg-neutral-800 hover:bg-yellow-400 hover:border-yellow-300 hover:shadow-[0_0_12px_rgba(250,204,21,0.60)]"
+                  : "border-neutral-400 bg-neutral-100 hover:bg-neutral-200 hover:border-blue-600 hover:shadow-[0_0_12px_rgba(23,23,23,0.20)]"
               }
-              active:scale-95
-            `}
+              backdrop-blur-md active:scale-95`}
           >
             {theme === "dark" ? (
-              <Sun className="w-5 h-5 text-yellow-50" />
+              <Sun className="w-5 h-5 text-yellow-300 transition-transform duration-500 hover:rotate-[360deg]" />
             ) : (
-              <Moon className="w-5 h-5 text-neutral-40" />
+              <Moon className="w-5 h-5 text-neutral-600 transition-transform duration-500 hover:rotate-[360deg]" />
             )}
           </button>
         </div>
-
-        {/* Mobile Menu Button */}
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="md:hidden p-2 rounded-lg active:scale-95 transition-all"
-        >
-          {menuOpen ? (
-            <X className="w-6 h-6 text-neutral-40 dark:text-neutral-90" />
-          ) : (
-            <Menu className="w-6 h-6 text-neutral-40 dark:text-neutral-90" />
-          )}
-        </button>
       </div>
-
-      {/* Mobile Menu */}
-      {menuOpen && (
-        <div
-          className={`
-            md:hidden px-6 py-4 space-y-4 transition-all duration-300 border-t backdrop-blur-xl
-            ${
-              theme === "dark"
-                ? "bg-[rgba(10,10,10,0.75)] border-neutral-30"
-                : "bg-[rgba(255,255,255,0.75)] border-neutral-90"
-            }
-          `}
-        >
-          {navItems.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.path}
-              className={({ isActive }) =>
-                `
-                  block font-medium text-[16px] py-1
-                  ${
-                    isActive
-                      ? "text-blue-60"
-                      : "text-neutral-40 hover:text-blue-60"
-                  }
-                `
-              }
-            >
-              {item.name}
-            </NavLink>
-          ))}
-
-          <button
-            onClick={toggleTheme}
-            className={`
-              w-full py-2 rounded-lg flex items-center justify-center gap-2 border transition-all
-              ${
-                theme === "dark"
-                  ? "bg-neutral-20 border-neutral-40 hover:bg-neutral-30 hover:border-blue-50"
-                  : "bg-neutral-95 border-neutral-70 hover:bg-neutral-85 hover:border-blue-50"
-              }
-            `}
-          >
-            {theme === "dark" ? (
-              <>
-                <Sun className="w-5 h-5 text-yellow-50" /> Light Mode
-              </>
-            ) : (
-              <>
-                <Moon className="w-5 h-5 text-neutral-40" /> Dark Mode
-              </>
-            )}
-          </button>
-        </div>
-      )}
     </nav>
   );
 };
