@@ -8,20 +8,25 @@ import { ThemeContext } from "../context/ThemeContext";
 
 /**
  * Home.jsx
- * - Double-range slider (A)
- * - Trending shown only when NO filters active
- * - Recommended ALWAYS visible when no filters (excludes trending vehicles)
- * - Filtered Results shown when any filter active (pagination)
+ * - Dynamic price slider system
+ * - Trending when no filters
+ * - Recommended when no filters
+ * - Filtered results when any filter is active
  */
 
-const MAX_PRICE = 20000000; // keep high default
+// ❌ Remove old fixed MAX_PRICE
+// const MAX_PRICE = 20000000;
 
+// ✅ Dynamic MAX price from API
 const Home = () => {
   const { theme } = useContext(ThemeContext);
 
   // Data
   const [trending, setTrending] = useState([]);
   const [allVehicles, setAllVehicles] = useState([]);
+
+  // Dynamic price limit
+  const [MAX_PRICE, setMaxPriceLimit] = useState(20000000);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -38,7 +43,7 @@ const Home = () => {
   const [recommendedPage, setRecommendedPage] = useState(1);
   const [filteredPage, setFilteredPage] = useState(1);
 
-  // fetch data
+  // FETCH DATA + CALCULATE MAX PRICE
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -46,14 +51,28 @@ const Home = () => {
           axios.get("http://localhost:5000/api/vehicles/trending"),
           axios.get("http://localhost:5000/api/vehicles"),
         ]);
+
+        const allData = Array.isArray(allRes.data) ? allRes.data : [];
         setTrending(Array.isArray(trRes.data) ? trRes.data : []);
-        setAllVehicles(Array.isArray(allRes.data) ? allRes.data : []);
+        setAllVehicles(allData);
+
+        // Calculate dynamic MAX_PRICE
+        if (allData.length > 0) {
+          const prices = allData.map(v => Number(v.price) || 0);
+          const highest = Math.max(...prices);
+          const dynamicLimit = Math.round(highest + highest * 0.10); // +10%
+
+          setMaxPriceLimit(dynamicLimit);
+          setMaxPrice(dynamicLimit); // update slider
+        }
+
       } catch (err) {
         console.error("Fetch error:", err);
       } finally {
         setLoading(false);
       }
     };
+
     fetchData();
   }, []);
 
@@ -65,29 +84,32 @@ const Home = () => {
       Number(minPrice) > 0 ||
       Number(maxPrice) < MAX_PRICE
     );
-  }, [search, type, minPrice, maxPrice]);
+  }, [search, type, minPrice, maxPrice, MAX_PRICE]);
 
-  // ---------- FILTERED VEHICLES (applies only when filtersActive) ----------
+  // FILTER VEHICLES
   const filteredVehicles = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allVehicles.filter((v) => {
       if (!v) return false;
       const matchesSearch =
         !q ||
-        (v.name && v.name.toLowerCase().includes(q)) ||
-        (v.brand && v.brand.toLowerCase().includes(q));
+        (v.name?.toLowerCase().includes(q)) ||
+        (v.brand?.toLowerCase().includes(q));
+
       const matchesType = type === "all" || v.type === type;
-      const price = typeof v.price === "number" ? v.price : Number(v.price) || 0;
+
+      const price = Number(v.price) || 0;
       const matchesPrice = price >= Number(minPrice) && price <= Number(maxPrice);
+
       return matchesSearch && matchesType && matchesPrice;
     });
   }, [allVehicles, search, type, minPrice, maxPrice]);
 
-  // ---------- RECOMMENDED LIST (shuffle of allVehicles excluding trending) ----------
+  // RECOMMENDED LIST
   const recommendedAll = useMemo(() => {
     const trendingIds = new Set(trending.map((t) => t._id));
     const pool = allVehicles.filter((v) => !trendingIds.has(v._id));
-    // simple shuffle (Fisher-Yates)
+
     const arr = [...pool];
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -96,7 +118,7 @@ const Home = () => {
     return arr;
   }, [allVehicles, trending]);
 
-  // ---------- Pagination helpers ----------
+  // PAGINATION
   const paginate = (items, page) => {
     const total = Math.ceil(items.length / vehiclesPerPage) || 1;
     const safePage = Math.min(Math.max(1, page), total);
@@ -105,19 +127,11 @@ const Home = () => {
     return { slice, total, safePage };
   };
 
-  // trending pagination (only used when filters NOT active)
   const { slice: trendingSlice, total: trendingTotal } = paginate(trending, trendingPage);
-
-  // recommended pagination (always used when trending visible; recommendedAll length can be > 10)
-  const { slice: recommendedSlice, total: recommendedTotal } = paginate(
-    recommendedAll,
-    recommendedPage
-  );
-
-  // filtered pagination (shown only when filtersActive)
+  const { slice: recommendedSlice, total: recommendedTotal } = paginate(recommendedAll, recommendedPage);
   const { slice: filteredSlice, total: filteredTotal } = paginate(filteredVehicles, filteredPage);
 
-  // reset filters
+  // RESET
   const resetFilters = () => {
     setSearch("");
     setType("all");
@@ -130,29 +144,24 @@ const Home = () => {
 
   const handleImageError = (e) => (e.target.src = "/placeholder.jpg");
 
-  // double-range handlers (A)
+  // SLIDER HANDLERS
   const onMinRangeChange = (val) => {
-    const newMin = Number(val);
-    if (newMin <= maxPrice) setMinPrice(newMin);
-    else setMinPrice(maxPrice);
-    setFilteredPage(1);
-  };
-  const onMaxRangeChange = (val) => {
-    const newMax = Number(val);
-    if (newMax >= minPrice) setMaxPrice(newMax);
-    else setMaxPrice(minPrice);
+    const v = Number(val);
+    setMinPrice(v <= maxPrice ? v : maxPrice);
     setFilteredPage(1);
   };
 
-  // when filters are changed, ensure trending/recommended hide and move to page 1 of filtered
+  const onMaxRangeChange = (val) => {
+    const v = Number(val);
+    setMaxPrice(v >= minPrice ? v : minPrice);
+    setFilteredPage(1);
+  };
+
+  // filter reset effects
   useEffect(() => {
-    if (filtersActive) {
-      // ensure the filtered page resets
-      setFilteredPage(1);
-    }
+    if (filtersActive) setFilteredPage(1);
   }, [filtersActive]);
 
-  // helper for going to page and scrolling
   const goTo = (setPage, p) => {
     setPage(p);
     window.scrollTo({ top: 200, behavior: "smooth" });
@@ -160,11 +169,12 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-neutral-98 dark:bg-neutral-10 transition-colors duration-300">
+
       {/* HERO */}
       <section
         className={`py-20 text-center shadow-lg transition-colors duration-300 ${
           theme === "dark"
-            ? "bg-gradient-to-r from-purple-900 via-indigo-800 to-blue-900 text-white"
+            ? "bg-gradient-to-r from-zinc-600 via-slate-600 to-slate-800 text-white"
             : "bg-gradient-to-r from-blue-300 via-blue-400 to-cyan-300 text-neutral-900"
         }`}
       >
@@ -180,33 +190,51 @@ const Home = () => {
 
       {/* FILTERS */}
       <section className="-mt-12 relative z-10 px-4">
-        <div className="max-w-7xl mx-auto bg-white/70 dark:bg-neutral-20/70 backdrop-blur-xl border border-neutral-85 dark:border-neutral-40 rounded-2xl shadow-xl p-6 md:p-8 flex flex-wrap gap-6 items-center justify-between">
+        <div
+          className="
+            max-w-7xl mx-auto
+            rounded-2xl shadow-xl backdrop-blur-xl
+            p-6 md:p-8 flex flex-wrap gap-6 items-center justify-between
+            bg-indigo-50/80 border border-indigo-200
+            dark:bg-neutral-900/60 dark:border-neutral-600
+          "
+        >
+
           {/* SEARCH */}
           <div className="relative">
-            <Search className="absolute left-3 top-3 text-neutral-50 dark:text-neutral-70" size={18} />
+            <Search
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-700 dark:text-neutral-300"
+            />
+
             <input
               type="text"
               placeholder="Search vehicles..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setFilteredPage(1);
-                // when user types, we want to hide trending automatically due to filtersActive derived state
-              }}
-              className="pl-10 pr-4 py-2 w-64 rounded-lg bg-neutral-98 dark:bg-neutral-20 border border-neutral-80 dark:border-neutral-40 focus:ring-2 focus:ring-blue-60 outline-none"
+              onChange={(e) => { setSearch(e.target.value); setFilteredPage(1); }}
+              className="
+                pl-10 pr-4 py-2 w-64 rounded-lg
+                transition outline-none
+                bg-white text-indigo-700 border border-indigo-300 placeholder-indigo-400
+                dark:bg-neutral-800 dark:text-neutral-200 dark:border-neutral-600 dark:placeholder-neutral-500
+                focus:ring-2 focus:ring-blue-60
+              "
             />
           </div>
 
           {/* TYPE */}
           <div className="flex items-center gap-2">
-            <Filter className="text-neutral-50 dark:text-neutral-70" size={18} />
+            <Filter size={18} className="text-indigo-700 dark:text-neutral-300" />
+
             <select
               value={type}
-              onChange={(e) => {
-                setType(e.target.value);
-                setFilteredPage(1);
-              }}
-              className="px-4 py-2 rounded-lg border bg-neutral-98 dark:bg-neutral-20 border-neutral-80 dark:border-neutral-40 focus:ring-2 focus:ring-blue-60 outline-none"
+              onChange={(e) => { setType(e.target.value); setFilteredPage(1); }}
+              className="
+                px-4 py-2 rounded-lg transition outline-none border
+                bg-white text-indigo-700 border-indigo-300
+                dark:bg-neutral-800 dark:text-neutral-200 dark:border-neutral-600
+                focus:ring-2 focus:ring-blue-60
+              "
             >
               <option value="all">All Types</option>
               <option value="car">Cars</option>
@@ -214,50 +242,101 @@ const Home = () => {
             </select>
           </div>
 
-          {/* DOUBLE-RANGE SLIDER (A) */}
-          <div className="flex flex-col w-80">
-            <label className="text-sm text-neutral-50 dark:text-neutral-60 mb-2">
+          {/* PRICE SLIDERS */}
+          <div className="flex flex-col w-80 gap-6">
+
+            <label className="text-sm font-semibold text-indigo-700 dark:text-neutral-300">
               Price Range
             </label>
 
-            <div className="relative w-full">
-              {/* Visual bar */}
-              <div className="h-2 rounded-full bg-neutral-90 dark:bg-neutral-30 w-full absolute top-2"></div>
+            {/* ------- MIN SLIDER ------- */}
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-xs text-neutral-600 dark:text-neutral-400">Min</span>
+                <span className="text-sm font-semibold text-indigo-700 dark:text-neutral-200">
+                  ₹{minPrice.toLocaleString()}
+                </span>
+              </div>
 
-              {/* filled range between handles */}
-              <div
-                className="h-2 rounded-full bg-blue-60 absolute top-2"
-                style={{
-                  left: `${(minPrice / MAX_PRICE) * 100}%`,
-                  right: `${100 - (maxPrice / MAX_PRICE) * 100}%`,
-                }}
-              />
+              <div className="relative w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full">
+                <div
+                  className="absolute h-full bg-blue-60 rounded-full transition-all"
+                  style={{ width: `${(minPrice / MAX_PRICE) * 100}%` }}
+                ></div>
 
-              {/* two range inputs stacked */}
-              <input
-                type="range"
-                min="0"
-                max={MAX_PRICE}
-                step="50000"
-                value={minPrice}
-                onChange={(e) => onMinRangeChange(e.target.value)}
-                className="appearance-none pointer-events-auto w-full bg-transparent relative z-20"
-              />
-              <input
-                type="range"
-                min="0"
-                max={MAX_PRICE}
-                step="50000"
-                value={maxPrice}
-                onChange={(e) => onMaxRangeChange(e.target.value)}
-                className="appearance-none pointer-events-auto w-full bg-transparent relative z-10 -mt-1"
-              />
+                <input
+                  type="range"
+                  min="0"
+                  max={MAX_PRICE}
+                  step="50000"
+                  value={minPrice}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    onMinRangeChange(v <= maxPrice ? v : maxPrice);
+                  }}
+                  className="
+                    absolute inset-0 w-full appearance-none bg-transparent
+                    [&::-webkit-slider-thumb]:appearance-none
+                    [&::-webkit-slider-thumb]:h-5
+                    [&::-webkit-slider-thumb]:w-5
+                    [&::-webkit-slider-thumb]:rounded-full
+                    [&::-webkit-slider-thumb]:bg-gradient-to-br
+                    [&::-webkit-slider-thumb]:from-indigo-600
+                    [&::-webkit-slider-thumb]:to-blue-500
+                    [&::-webkit-slider-thumb]:border-2
+                    [&::-webkit-slider-thumb]:border-white
+                    [&::-webkit-slider-thumb]:cursor-pointer
+                    [&::-webkit-slider-thumb]:transition-transform
+                    [&::-webkit-slider-thumb]:hover:scale-110
+                  "
+                />
+              </div>
             </div>
 
-            <div className="flex justify-between mt-2 text-sm text-neutral-50 dark:text-neutral-70">
-              <div>₹{minPrice.toLocaleString()}</div>
-              <div>₹{maxPrice.toLocaleString()}</div>
+            {/* ------- MAX SLIDER ------- */}
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-xs text-neutral-600 dark:text-neutral-400">Max</span>
+                <span className="text-sm font-semibold text-indigo-700 dark:text-neutral-200">
+                  ₹{maxPrice.toLocaleString()}
+                </span>
+              </div>
+
+              <div className="relative w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full">
+                <div
+                  className="absolute h-full bg-blue-60 rounded-full transition-all"
+                  style={{ width: `${(maxPrice / MAX_PRICE) * 100}%` }}
+                ></div>
+
+                <input
+                  type="range"
+                  min="0"
+                  max={MAX_PRICE}
+                  step="50000"
+                  value={maxPrice}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    onMaxRangeChange(v >= minPrice ? v : minPrice);
+                  }}
+                  className="
+                    absolute inset-0 w-full appearance-none bg-transparent
+                    [&::-webkit-slider-thumb]:appearance-none
+                    [&::-webkit-slider-thumb]:h-5
+                    [&::-webkit-slider-thumb]:w-5
+                    [&::-webkit-slider-thumb]:rounded-full
+                    [&::-webkit-slider-thumb]:bg-gradient-to-br
+                    [&::-webkit-slider-thumb]:from-indigo-600
+                    [&::-webkit-slider-thumb]:to-blue-500
+                    [&::-webkit-slider-thumb]:border-2
+                    [&::-webkit-slider-thumb]:border-white
+                    [&::-webkit-slider-thumb]:cursor-pointer
+                    [&::-webkit-slider-thumb]:transition-transform
+                    [&::-webkit-slider-thumb]:hover:scale-110
+                  "
+                />
+              </div>
             </div>
+
           </div>
 
           {/* RESET */}
@@ -265,24 +344,24 @@ const Home = () => {
             <button
               onClick={() => {
                 resetFilters();
-                // also restore pages
                 setTrendingPage(1);
                 setRecommendedPage(1);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-60 text-white rounded-lg hover:bg-blue-70 transition"
+              className="
+                flex items-center gap-2 px-4 py-2 rounded-lg transition
+                bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-400
+                dark:bg-blue-60 dark:text-neutral-900 dark:hover:bg-blue-70 dark:border-neutral-600
+              "
             >
               <RefreshCcw size={16} /> Reset
             </button>
           </div>
+
         </div>
       </section>
 
-      {/* RESULTS LAYOUT
-          - If filtersActive -> show only Filtered Results (paginated)
-          - If not -> show Trending (paginated) then Recommended (paginated)
-      */}
+      {/* RESULTS */}
 
-      {/* FILTERED RESULTS (only visible when any filter active) */}
       {filtersActive ? (
         <section className="max-w-7xl mx-auto px-6 py-14">
           <h3 className="text-2xl font-semibold mb-6">
@@ -297,7 +376,7 @@ const Home = () => {
         </section>
       ) : (
         <>
-          {/* TRENDING (only when no filters active) */}
+          {/* TRENDING */}
           <section className="max-w-7xl mx-auto px-6 py-14">
             <h3 className="text-2xl font-semibold mb-6 flex items-center gap-2">
               <span className="text-3xl">🔥</span> Trending Vehicles
@@ -310,7 +389,7 @@ const Home = () => {
             )}
           </section>
 
-          {/* RECOMMENDED (always visible when no filters; uses full set excluding trending) */}
+          {/* RECOMMENDED */}
           <section className="max-w-7xl mx-auto px-6 pb-14">
             <h3 className="text-2xl font-semibold mb-6 flex items-center gap-2">
               <span className="text-3xl">⭐</span> Recommended for You
@@ -329,11 +408,12 @@ const Home = () => {
       <footer className="text-center py-6 border-t border-neutral-85 dark:border-neutral-40 text-sm text-neutral-50 dark:text-neutral-70">
         © {new Date().getFullYear()} <span className="text-blue-60 font-semibold">DriveMatch</span>. All Rights Reserved.
       </footer>
+
     </div>
   );
 };
 
-// VEHICLE GRID (reusable)
+// VEHICLE GRID
 const VehicleGrid = ({ loading, vehicles, handleImageError }) => {
   if (loading)
     return (
@@ -356,7 +436,7 @@ const VehicleGrid = ({ loading, vehicles, handleImageError }) => {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             whileHover={{ scale: 1.03 }}
-            className="bg-white dark:bg-neutral-20 border border-neutral-85 dark:border-neutral-40 rounded-2xl shadow-md hover:shadow-xl transition p-4 flex flex-col"
+            className="bg-lg dark:bg-neutral-20 border border-neutral-85 dark:border-neutral-40 rounded-2xl shadow-md hover:shadow-xl transition p-4 flex flex-col"
           >
             <img src={v.image || "/placeholder.jpg"} onError={handleImageError} className="w-full h-40 object-cover rounded-xl" alt={v.name} />
 
@@ -365,7 +445,7 @@ const VehicleGrid = ({ loading, vehicles, handleImageError }) => {
 
             <p className="text-blue-60 dark:text-blue-40 font-semibold text-lg mt-1">₹{v.price?.toLocaleString()}</p>
 
-            <Link to={`/vehicle/${v._id}`} className="mt-4 bg-blue-60 hover:bg-blue-70 text-white py-2 rounded-lg text-center">
+            <Link to={`/vehicle/${v._id}`} className="mt-4 bg-blue-60 hover:bg-blue-70 text-lg py-2 rounded-lg text-center border-2 transition font-medium hover:bg-slate-500">
               View Details
             </Link>
           </motion.div>
@@ -375,7 +455,7 @@ const VehicleGrid = ({ loading, vehicles, handleImageError }) => {
   );
 };
 
-// PAGINATION component
+// PAGINATION
 const Pagination = ({ totalPages, currentPage, setPage }) => {
   if (!totalPages || totalPages <= 1) return null;
   const pages = Array.from({ length: totalPages }).map((_, i) => i + 1);

@@ -8,11 +8,17 @@ export const ThemeProvider = ({ children }) => {
     return localStorage.getItem("theme") || "dark";
   });
 
-  // Apply theme instantly
   useEffect(() => {
     const root = document.documentElement;
-    root.dataset.theme = theme;               // <html data-theme="dark">
+
+    // Your existing system: Save + set attribute
+    root.dataset.theme = theme;
     localStorage.setItem("theme", theme);
+
+    // ⭐ IMPORTANT: Sync Tailwind's dark mode ⭐
+    // This enables the "dark:" classes across the whole app
+    root.classList.toggle("dark", theme === "dark");
+
   }, [theme]);
 
   const toggleTheme = () =>
@@ -20,7 +26,9 @@ export const ThemeProvider = ({ children }) => {
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      <div className="transition-colors duration-300">{children}</div>
+      <div className="transition-colors duration-300">
+        {children}
+      </div>
     </ThemeContext.Provider>
   );
 };

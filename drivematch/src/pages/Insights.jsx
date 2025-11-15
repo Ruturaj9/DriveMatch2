@@ -14,7 +14,7 @@ import {
   Legend,
 } from "recharts";
 import { motion } from "framer-motion";
-import { Gauge, Car, Fuel, Trophy } from "lucide-react";
+import { Gauge, Car, Fuel } from "lucide-react";
 
 const COLORS = ["#2563eb", "#16a34a", "#f97316", "#e11d48", "#a855f7"];
 
@@ -22,15 +22,16 @@ const Insights = () => {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // ⭐ Fetch ONLY top 100 trending vehicles
   useEffect(() => {
     axios
-      .get("http://localhost:5000/api/vehicles")
+      .get("http://localhost:5000/api/vehicles/trending?limit=100")
       .then((res) => setVehicles(res.data))
       .catch((err) => console.error("Error:", err))
       .finally(() => setLoading(false));
   }, []);
 
-  // 🧠 Memoized analytics
+  // 🧠 Memoized insights
   const {
     avgPriceByBrand,
     fuelDist,
@@ -39,9 +40,15 @@ const Insights = () => {
     overallAvgPrice,
     mostCommonFuel,
   } = useMemo(() => {
-    if (!vehicles.length) return {};
+    if (!vehicles.length) return {
+      avgPriceByBrand: [],
+      fuelDist: [],
+      topPerformance: [],
+      totalVehicles: 0,
+      overallAvgPrice: 0,
+      mostCommonFuel: "N/A",
+    };
 
-    // Avg price by brand
     const avgPriceByBrand = Object.values(
       vehicles.reduce((acc, v) => {
         if (!v.brand || !v.price) return acc;
@@ -58,7 +65,6 @@ const Insights = () => {
       .sort((a, b) => b.avgPrice - a.avgPrice)
       .slice(0, 8);
 
-    // Fuel distribution
     const fuelDist = Object.values(
       vehicles.reduce((acc, v) => {
         if (!v.fuelType) return acc;
@@ -68,7 +74,6 @@ const Insights = () => {
       }, {})
     );
 
-    // Top performance
     const topPerformance = [...vehicles]
       .filter((v) => v.performanceScore)
       .sort((a, b) => b.performanceScore - a.performanceScore)
@@ -79,6 +84,7 @@ const Insights = () => {
       }));
 
     const totalVehicles = vehicles.length;
+
     const overallAvgPrice = Math.round(
       vehicles.reduce((sum, v) => sum + (v.price || 0), 0) / totalVehicles
     );
@@ -96,6 +102,7 @@ const Insights = () => {
     };
   }, [vehicles]);
 
+  // Loader
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-neutral-40 dark:text-neutral-70 text-lg">
@@ -105,12 +112,11 @@ const Insights = () => {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-98 dark:bg-neutral-10 px-6 py-10 transition-colors">
+    <div className="min-h-screen bg-neutral-98 dark:bg-neutral-10 px-6 py-10">
       <div className="max-w-7xl mx-auto">
-
-        {/* Heading */}
+        
         <h1 className="text-3xl font-bold text-blue-60 dark:text-blue-40 mb-10 text-center">
-          📊 Vehicle Insights Dashboard
+          📊 Insights on Top 100 Trending Vehicles
         </h1>
 
         {/* Summary Cards */}
@@ -121,13 +127,13 @@ const Insights = () => {
         >
           <div className="bg-white dark:bg-neutral-20 border border-neutral-85 dark:border-neutral-40 rounded-xl shadow-md p-5 text-center">
             <Car className="mx-auto text-blue-60 mb-2" size={28} />
-            <p className="text-neutral-40 dark:text-neutral-60">Total Vehicles</p>
+            <p className="text-neutral-40 dark:text-neutral-60">Trending Vehicles</p>
             <h3 className="text-3xl font-bold text-blue-60">{totalVehicles}</h3>
           </div>
 
           <div className="bg-white dark:bg-neutral-20 border border-neutral-85 dark:border-neutral-40 rounded-xl shadow-md p-5 text-center">
             <Gauge className="mx-auto text-green-60 mb-2" size={28} />
-            <p className="text-neutral-40 dark:text-neutral-60">Average Price</p>
+            <p className="text-neutral-40 dark:text-neutral-60">Avg Price</p>
             <h3 className="text-3xl font-bold text-green-60">
               ₹{overallAvgPrice.toLocaleString()}
             </h3>
@@ -142,31 +148,21 @@ const Insights = () => {
 
         {/* Avg Price by Brand */}
         <section className="bg-white dark:bg-neutral-20 rounded-2xl shadow-md border border-neutral-85 dark:border-neutral-40 p-6 mb-12">
-          <h2 className="text-xl font-semibold text-neutral-20 dark:text-neutral-90 mb-4">
-            💰 Average Price by Brand
-          </h2>
+          <h2 className="text-xl font-semibold mb-4">💰 Average Price by Brand</h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={avgPriceByBrand}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="brand" />
               <YAxis />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#101010",
-                  color: "#fff",
-                  borderRadius: "10px",
-                }}
-              />
+              <Tooltip />
               <Bar dataKey="avgPrice" fill="#2563eb" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </section>
 
         {/* Fuel Distribution */}
-        <section className="bg-white dark:bg-neutral-20 rounded-2xl shadow-md border border-neutral-85 dark:border-neutral-40 p-6 mb-12">
-          <h2 className="text-xl font-semibold text-neutral-20 dark:text-neutral-90 mb-4">
-            ⛽ Fuel Type Distribution
-          </h2>
+        <section className="bg-white dark:bg-neutral-20 rounded-2xl shadow-md border p-6 mb-12">
+          <h2 className="text-xl font-semibold mb-4">⛽ Fuel Type Distribution</h2>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -182,39 +178,26 @@ const Insights = () => {
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#101010",
-                  color: "#fff",
-                  borderRadius: "10px",
-                }}
-              />
+              <Tooltip />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
         </section>
 
         {/* Top Performance */}
-        <section className="bg-white dark:bg-neutral-20 rounded-2xl shadow-md border border-neutral-85 dark:border-neutral-40 p-6 mb-12">
-          <h2 className="text-xl font-semibold text-neutral-20 dark:text-neutral-90 mb-4">
-            🏎️ Top Performance Vehicles
-          </h2>
+        <section className="bg-white dark:bg-neutral-20 rounded-2xl shadow-md border p-6 mb-12">
+          <h2 className="text-xl font-semibold mb-4">🏎️ Top Performance Vehicles</h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={topPerformance}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#101010",
-                  color: "#fff",
-                  borderRadius: "10px",
-                }}
-              />
+              <Tooltip />
               <Bar dataKey="performance" fill="#16a34a" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </section>
+
       </div>
     </div>
   );

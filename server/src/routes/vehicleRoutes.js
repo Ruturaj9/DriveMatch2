@@ -77,18 +77,24 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
-   🔥 GET: Trending vehicles
+   🔥 GET: Trending vehicles (supports ?limit=100)
    ========================================================== */
 router.get("/trending", async (req, res) => {
   try {
-    const trendingVehicles = await Vehicle.find({ isTrending: true }).limit(
-      300
-    );
+    // Accept ?limit=100 (default: 100)
+    const limit = req.query.limit ? Number(req.query.limit) : 100;
+
+    // Prevent overload → cap to max 300
+    const safeLimit = Math.min(limit, 300);
+
+    const trendingVehicles = await Vehicle.find({ isTrending: true }).limit(safeLimit);
+
     res.json(trendingVehicles);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 /* ==========================================================
    🔍 GET: Single Vehicle Details
