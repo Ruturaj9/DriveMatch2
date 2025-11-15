@@ -40,14 +40,15 @@ const Insights = () => {
     overallAvgPrice,
     mostCommonFuel,
   } = useMemo(() => {
-    if (!vehicles.length) return {
-      avgPriceByBrand: [],
-      fuelDist: [],
-      topPerformance: [],
-      totalVehicles: 0,
-      overallAvgPrice: 0,
-      mostCommonFuel: "N/A",
-    };
+    if (!vehicles.length)
+      return {
+        avgPriceByBrand: [],
+        fuelDist: [],
+        topPerformance: [],
+        totalVehicles: 0,
+        overallAvgPrice: 0,
+        mostCommonFuel: "N/A",
+      };
 
     const avgPriceByBrand = Object.values(
       vehicles.reduce((acc, v) => {
@@ -105,16 +106,16 @@ const Insights = () => {
   // Loader
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-neutral-40 dark:text-neutral-70 text-lg">
+      <div className="min-h-screen flex items-center justify-center text-[var(--color-text)] text-lg bg-[var(--color-bg)] transition-colors">
         Loading Insights...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-neutral-98 dark:bg-neutral-10 px-6 py-10">
+    <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] px-6 py-10 transition-colors">
       <div className="max-w-7xl mx-auto">
-        
+
         <h1 className="text-3xl font-bold text-blue-60 dark:text-blue-40 mb-10 text-center">
           📊 Insights on Top 100 Trending Vehicles
         </h1>
@@ -125,43 +126,54 @@ const Insights = () => {
           animate={{ opacity: 1, y: 0 }}
           className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 mb-12"
         >
-          <div className="bg-white dark:bg-neutral-20 border border-neutral-85 dark:border-neutral-40 rounded-xl shadow-md p-5 text-center">
+          {/* CARD 1 */}
+          <div className="bg-[var(--color-bg)] border border-[var(--color-text)]/20 dark:border-neutral-40 rounded-xl shadow-lg p-5 text-center transition">
             <Car className="mx-auto text-blue-60 mb-2" size={28} />
-            <p className="text-neutral-40 dark:text-neutral-60">Trending Vehicles</p>
-            <h3 className="text-3xl font-bold text-blue-60">{totalVehicles}</h3>
+            <p className="opacity-70">Trending Vehicles</p>
+            <h3 className="text-3xl font-bold text-blue-60 dark:text-blue-40">
+              {totalVehicles}
+            </h3>
           </div>
 
-          <div className="bg-white dark:bg-neutral-20 border border-neutral-85 dark:border-neutral-40 rounded-xl shadow-md p-5 text-center">
+          {/* CARD 2 */}
+          <div className="bg-[var(--color-bg)] border border-[var(--color-text)]/20 rounded-xl shadow-lg p-5 text-center transition">
             <Gauge className="mx-auto text-green-60 mb-2" size={28} />
-            <p className="text-neutral-40 dark:text-neutral-60">Avg Price</p>
+            <p className="opacity-70">Avg Price</p>
             <h3 className="text-3xl font-bold text-green-60">
               ₹{overallAvgPrice.toLocaleString()}
             </h3>
           </div>
 
-          <div className="bg-white dark:bg-neutral-20 border border-neutral-85 dark:border-neutral-40 rounded-xl shadow-md p-5 text-center">
+          {/* CARD 3 */}
+          <div className="bg-[var(--color-bg)] border border-[var(--color-text)]/20 rounded-xl shadow-lg p-5 text-center transition">
             <Fuel className="mx-auto text-orange-60 mb-2" size={28} />
-            <p className="text-neutral-40 dark:text-neutral-60">Most Common Fuel</p>
+            <p className="opacity-70">Most Common Fuel</p>
             <h3 className="text-2xl font-bold text-orange-60">{mostCommonFuel}</h3>
           </div>
         </motion.div>
 
         {/* Avg Price by Brand */}
-        <section className="bg-white dark:bg-neutral-20 rounded-2xl shadow-md border border-neutral-85 dark:border-neutral-40 p-6 mb-12">
+        <section className="bg-[var(--color-bg)] rounded-2xl shadow-lg border border-[var(--color-text)]/20 p-6 mb-12 transition">
           <h2 className="text-xl font-semibold mb-4">💰 Average Price by Brand</h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={avgPriceByBrand}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="brand" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-text)" opacity={0.2} />
+              <XAxis dataKey="brand" stroke="var(--color-text)" />
+              <YAxis stroke="var(--color-text)" />
+              <Tooltip
+                contentStyle={{
+                  background: "var(--color-bg)",
+                  color: "var(--color-text)",
+                  borderRadius: "10px",
+                }}
+              />
               <Bar dataKey="avgPrice" fill="#2563eb" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </section>
 
         {/* Fuel Distribution */}
-        <section className="bg-white dark:bg-neutral-20 rounded-2xl shadow-md border p-6 mb-12">
+        <section className="bg-[var(--color-bg)] rounded-2xl shadow-lg border border-[var(--color-text)]/20 p-6 mb-12 transition">
           <h2 className="text-xl font-semibold mb-4">⛽ Fuel Type Distribution</h2>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
@@ -178,21 +190,33 @@ const Insights = () => {
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip
+                contentStyle={{
+                  background: "var(--color-bg)",
+                  color: "var(--color-text)",
+                  borderRadius: "10px",
+                }}
+              />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
         </section>
 
         {/* Top Performance */}
-        <section className="bg-white dark:bg-neutral-20 rounded-2xl shadow-md border p-6 mb-12">
+        <section className="bg-[var(--color-bg)] rounded-2xl shadow-lg border border-[var(--color-text)]/20 p-6 mb-12 transition">
           <h2 className="text-xl font-semibold mb-4">🏎️ Top Performance Vehicles</h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={topPerformance}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-text)" opacity={0.2} />
+              <XAxis dataKey="name" stroke="var(--color-text)" />
+              <YAxis stroke="var(--color-text)" />
+              <Tooltip
+                contentStyle={{
+                  background: "var(--color-bg)",
+                  color: "var(--color-text)",
+                  borderRadius: "10px",
+                }}
+              />
               <Bar dataKey="performance" fill="#16a34a" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

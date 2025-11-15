@@ -1,49 +1,40 @@
 // src/pages/Home.jsx
 import { useEffect, useState, useMemo, useContext } from "react";
 import axios from "axios";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom"; // ⭐ added
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Filter, RefreshCcw } from "lucide-react";
 import { ThemeContext } from "../context/ThemeContext";
 
-/**
- * Home.jsx
- * - Dynamic price slider system
- * - Trending when no filters
- * - Recommended when no filters
- * - Filtered results when any filter is active
- */
-
-// ❌ Remove old fixed MAX_PRICE
-// const MAX_PRICE = 20000000;
-
-// ✅ Dynamic MAX price from API
 const Home = () => {
   const { theme } = useContext(ThemeContext);
+  const location = useLocation(); // ⭐ added
 
-  // Data
+  // ⭐ Parse ?ids=1,2,3 from Assistant
+  const urlParams = new URLSearchParams(location.search);
+  const assistantIds = urlParams.get("ids")
+    ? urlParams.get("ids").split(",")
+    : [];
+
+  // DATA
   const [trending, setTrending] = useState([]);
   const [allVehicles, setAllVehicles] = useState([]);
 
-  // Dynamic price limit
+  // PRICE SLIDERS
   const [MAX_PRICE, setMaxPriceLimit] = useState(20000000);
-
-  // Filters
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
   const [minPrice, setMinPrice] = useState(0);
   const [maxPrice, setMaxPrice] = useState(MAX_PRICE);
 
-  // loading & pagination state
+  // loading + pagination
   const [loading, setLoading] = useState(true);
   const vehiclesPerPage = 8;
-
-  // pages
   const [trendingPage, setTrendingPage] = useState(1);
   const [recommendedPage, setRecommendedPage] = useState(1);
   const [filteredPage, setFilteredPage] = useState(1);
 
-  // FETCH DATA + CALCULATE MAX PRICE
+  // FETCH DATA
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -56,16 +47,13 @@ const Home = () => {
         setTrending(Array.isArray(trRes.data) ? trRes.data : []);
         setAllVehicles(allData);
 
-        // Calculate dynamic MAX_PRICE
         if (allData.length > 0) {
-          const prices = allData.map(v => Number(v.price) || 0);
+          const prices = allData.map((v) => Number(v.price) || 0);
           const highest = Math.max(...prices);
-          const dynamicLimit = Math.round(highest + highest * 0.10); // +10%
-
+          const dynamicLimit = Math.round(highest + highest * 0.1);
           setMaxPriceLimit(dynamicLimit);
-          setMaxPrice(dynamicLimit); // update slider
+          setMaxPrice(dynamicLimit);
         }
-
       } catch (err) {
         console.error("Fetch error:", err);
       } finally {
@@ -76,41 +64,62 @@ const Home = () => {
     fetchData();
   }, []);
 
-  // Determine whether any filter is active
+  // ⭐ Assistant-selected vehicles
+  const assistantVehicles = useMemo(() => {
+    if (!assistantIds.length) return [];
+    return allVehicles.filter((v) => assistantIds.includes(v._id));
+  }, [assistantIds, allVehicles]);
+
+  // FILTER MODE (assistant OR normal filters)
   const filtersActive = useMemo(() => {
+    if (assistantIds.length) return true;
+
     return (
       search.trim().length > 0 ||
       type !== "all" ||
       Number(minPrice) > 0 ||
       Number(maxPrice) < MAX_PRICE
     );
-  }, [search, type, minPrice, maxPrice, MAX_PRICE]);
+  }, [assistantIds, search, type, minPrice, maxPrice, MAX_PRICE]);
 
   // FILTER VEHICLES
   const filteredVehicles = useMemo(() => {
+    if (assistantIds.length) return assistantVehicles;
+
     const q = search.trim().toLowerCase();
+
     return allVehicles.filter((v) => {
       if (!v) return false;
+
       const matchesSearch =
         !q ||
-        (v.name?.toLowerCase().includes(q)) ||
-        (v.brand?.toLowerCase().includes(q));
+        v.name?.toLowerCase().includes(q) ||
+        v.brand?.toLowerCase().includes(q);
 
       const matchesType = type === "all" || v.type === type;
 
       const price = Number(v.price) || 0;
-      const matchesPrice = price >= Number(minPrice) && price <= Number(maxPrice);
+      const matchesPrice =
+        price >= Number(minPrice) && price <= Number(maxPrice);
 
       return matchesSearch && matchesType && matchesPrice;
     });
-  }, [allVehicles, search, type, minPrice, maxPrice]);
+  }, [
+    assistantIds,
+    assistantVehicles,
+    allVehicles,
+    search,
+    type,
+    minPrice,
+    maxPrice,
+  ]);
 
   // RECOMMENDED LIST
   const recommendedAll = useMemo(() => {
     const trendingIds = new Set(trending.map((t) => t._id));
     const pool = allVehicles.filter((v) => !trendingIds.has(v._id));
-
     const arr = [...pool];
+
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -127,12 +136,20 @@ const Home = () => {
     return { slice, total, safePage };
   };
 
-  const { slice: trendingSlice, total: trendingTotal } = paginate(trending, trendingPage);
-  const { slice: recommendedSlice, total: recommendedTotal } = paginate(recommendedAll, recommendedPage);
-  const { slice: filteredSlice, total: filteredTotal } = paginate(filteredVehicles, filteredPage);
+  const { slice: trendingSlice, total: trendingTotal } =
+    paginate(trending, trendingPage);
 
-  // RESET
+  const { slice: recommendedSlice, total: recommendedTotal } =
+    paginate(recommendedAll, recommendedPage);
+
+  const { slice: filteredSlice, total: filteredTotal } =
+    paginate(filteredVehicles, filteredPage);
+
+  // RESET FILTERS
   const resetFilters = () => {
+    // ⭐ Clear assistant mode
+    window.history.replaceState({}, "", "/");
+
     setSearch("");
     setType("all");
     setMinPrice(0);
@@ -144,20 +161,18 @@ const Home = () => {
 
   const handleImageError = (e) => (e.target.src = "/placeholder.jpg");
 
-  // SLIDER HANDLERS
-  const onMinRangeChange = (val) => {
-    const v = Number(val);
+  const onMinRangeChange = (v) => {
+    v = Number(v);
     setMinPrice(v <= maxPrice ? v : maxPrice);
     setFilteredPage(1);
   };
 
-  const onMaxRangeChange = (val) => {
-    const v = Number(val);
+  const onMaxRangeChange = (v) => {
+    v = Number(v);
     setMaxPrice(v >= minPrice ? v : minPrice);
     setFilteredPage(1);
   };
 
-  // filter reset effects
   useEffect(() => {
     if (filtersActive) setFilteredPage(1);
   }, [filtersActive]);
@@ -169,13 +184,12 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-neutral-98 dark:bg-neutral-10 transition-colors duration-300">
-
-      {/* HERO */}
+      {/* ---------------- HERO (UNCHANGED UI) ---------------- */}
       <section
-        className={`py-20 text-center shadow-lg transition-colors duration-300 ${
+        className={`py-20 text-center shadow-lg transition-colors duration-300 rounded-b ${
           theme === "dark"
-            ? "bg-gradient-to-r from-zinc-600 via-slate-600 to-slate-800 text-white"
-            : "bg-gradient-to-r from-blue-300 via-blue-400 to-cyan-300 text-neutral-900"
+            ? "bg-gradient-to-r from-zinc-600/70 via-zinc-800 to-zinc-900 text-white"
+            : "bg-gradient-to-r from-blue-100/60 via-blue-200/60 to-cyan-200/60 text-neutral-900"
         }`}
       >
         <div className="max-w-3xl mx-auto px-6">
@@ -183,12 +197,13 @@ const Home = () => {
             Find Your Perfect Ride
           </h2>
           <p className="text-lg opacity-90">
-            Explore trending vehicles, compare specs instantly, and discover your ideal match.
+            Explore trending vehicles, compare specs instantly, and discover
+            your ideal match.
           </p>
         </div>
       </section>
 
-      {/* FILTERS */}
+      {/* ---------------- FILTERS (UNCHANGED UI) ---------------- */}
       <section className="-mt-12 relative z-10 px-4">
         <div
           className="
@@ -199,7 +214,6 @@ const Home = () => {
             dark:bg-neutral-900/60 dark:border-neutral-600
           "
         >
-
           {/* SEARCH */}
           <div className="relative">
             <Search
@@ -211,7 +225,10 @@ const Home = () => {
               type="text"
               placeholder="Search vehicles..."
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setFilteredPage(1); }}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setFilteredPage(1);
+              }}
               className="
                 pl-10 pr-4 py-2 w-64 rounded-lg
                 transition outline-none
@@ -224,11 +241,17 @@ const Home = () => {
 
           {/* TYPE */}
           <div className="flex items-center gap-2">
-            <Filter size={18} className="text-indigo-700 dark:text-neutral-300" />
+            <Filter
+              size={18}
+              className="text-indigo-700 dark:text-neutral-300"
+            />
 
             <select
               value={type}
-              onChange={(e) => { setType(e.target.value); setFilteredPage(1); }}
+              onChange={(e) => {
+                setType(e.target.value);
+                setFilteredPage(1);
+              }}
               className="
                 px-4 py-2 rounded-lg transition outline-none border
                 bg-white text-indigo-700 border-indigo-300
@@ -244,15 +267,16 @@ const Home = () => {
 
           {/* PRICE SLIDERS */}
           <div className="flex flex-col w-80 gap-6">
-
             <label className="text-sm font-semibold text-indigo-700 dark:text-neutral-300">
               Price Range
             </label>
 
-            {/* ------- MIN SLIDER ------- */}
+            {/* MIN SLIDER */}
             <div>
               <div className="flex justify-between mb-1">
-                <span className="text-xs text-neutral-600 dark:text-neutral-400">Min</span>
+                <span className="text-xs text-neutral-600 dark:text-neutral-400">
+                  Min
+                </span>
                 <span className="text-sm font-semibold text-indigo-700 dark:text-neutral-200">
                   ₹{minPrice.toLocaleString()}
                 </span>
@@ -261,7 +285,9 @@ const Home = () => {
               <div className="relative w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full">
                 <div
                   className="absolute h-full bg-blue-60 rounded-full transition-all"
-                  style={{ width: `${(minPrice / MAX_PRICE) * 100}%` }}
+                  style={{
+                    width: `${(minPrice / MAX_PRICE) * 100}%`,
+                  }}
                 ></div>
 
                 <input
@@ -270,10 +296,7 @@ const Home = () => {
                   max={MAX_PRICE}
                   step="50000"
                   value={minPrice}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    onMinRangeChange(v <= maxPrice ? v : maxPrice);
-                  }}
+                  onChange={(e) => onMinRangeChange(e.target.value)}
                   className="
                     absolute inset-0 w-full appearance-none bg-transparent
                     [&::-webkit-slider-thumb]:appearance-none
@@ -293,10 +316,12 @@ const Home = () => {
               </div>
             </div>
 
-            {/* ------- MAX SLIDER ------- */}
+            {/* MAX SLIDER */}
             <div>
               <div className="flex justify-between mb-1">
-                <span className="text-xs text-neutral-600 dark:text-neutral-400">Max</span>
+                <span className="text-xs text-neutral-600 dark:text-neutral-400">
+                  Max
+                </span>
                 <span className="text-sm font-semibold text-indigo-700 dark:text-neutral-200">
                   ₹{maxPrice.toLocaleString()}
                 </span>
@@ -305,7 +330,9 @@ const Home = () => {
               <div className="relative w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full">
                 <div
                   className="absolute h-full bg-blue-60 rounded-full transition-all"
-                  style={{ width: `${(maxPrice / MAX_PRICE) * 100}%` }}
+                  style={{
+                    width: `${(maxPrice / MAX_PRICE) * 100}%`,
+                  }}
                 ></div>
 
                 <input
@@ -314,10 +341,7 @@ const Home = () => {
                   max={MAX_PRICE}
                   step="50000"
                   value={maxPrice}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    onMaxRangeChange(v >= minPrice ? v : minPrice);
-                  }}
+                  onChange={(e) => onMaxRangeChange(e.target.value)}
                   className="
                     absolute inset-0 w-full appearance-none bg-transparent
                     [&::-webkit-slider-thumb]:appearance-none
@@ -336,7 +360,6 @@ const Home = () => {
                 />
               </div>
             </div>
-
           </div>
 
           {/* RESET */}
@@ -349,29 +372,35 @@ const Home = () => {
               }}
               className="
                 flex items-center gap-2 px-4 py-2 rounded-lg transition
-                bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-400
-                dark:bg-blue-60 dark:text-neutral-900 dark:hover:bg-blue-70 dark:border-neutral-600
+                bg-blue-500 text-white hover:bg-indigo-400 border border-indigo-700 focus:ring-2 focus:ring-zinc-600
+                dark:bg-blue-500 dark:text-neutral-900 dark:hover:bg-indigo-700 dark:border-neutral-600 dark:focus:ring-2 dark:focus:ring-white
               "
             >
               <RefreshCcw size={16} /> Reset
             </button>
           </div>
-
         </div>
       </section>
 
-      {/* RESULTS */}
-
+      {/* ---------------- RESULTS ---------------- */}
       {filtersActive ? (
         <section className="max-w-7xl mx-auto px-6 py-14">
           <h3 className="text-2xl font-semibold mb-6">
             🔎 Filtered Results ({filteredVehicles.length})
           </h3>
 
-          <VehicleGrid loading={loading} vehicles={filteredSlice} handleImageError={handleImageError} />
+          <VehicleGrid
+            loading={loading}
+            vehicles={filteredSlice}
+            handleImageError={handleImageError}
+          />
 
           {filteredTotal > 1 && (
-            <Pagination totalPages={filteredTotal} currentPage={filteredPage} setPage={(p) => goTo(setFilteredPage, p)} />
+            <Pagination
+              totalPages={filteredTotal}
+              currentPage={filteredPage}
+              setPage={(p) => goTo(setFilteredPage, p)}
+            />
           )}
         </section>
       ) : (
@@ -382,10 +411,18 @@ const Home = () => {
               <span className="text-3xl">🔥</span> Trending Vehicles
             </h3>
 
-            <VehicleGrid loading={loading} vehicles={trendingSlice} handleImageError={handleImageError} />
+            <VehicleGrid
+              loading={loading}
+              vehicles={trendingSlice}
+              handleImageError={handleImageError}
+            />
 
             {trendingTotal > 1 && (
-              <Pagination totalPages={trendingTotal} currentPage={trendingPage} setPage={(p) => goTo(setTrendingPage, p)} />
+              <Pagination
+                totalPages={trendingTotal}
+                currentPage={trendingPage}
+                setPage={(p) => goTo(setTrendingPage, p)}
+              />
             )}
           </section>
 
@@ -395,10 +432,18 @@ const Home = () => {
               <span className="text-3xl">⭐</span> Recommended for You
             </h3>
 
-            <VehicleGrid loading={loading} vehicles={recommendedSlice} handleImageError={handleImageError} />
+            <VehicleGrid
+              loading={loading}
+              vehicles={recommendedSlice}
+              handleImageError={handleImageError}
+            />
 
             {recommendedTotal > 1 && (
-              <Pagination totalPages={recommendedTotal} currentPage={recommendedPage} setPage={(p) => goTo(setRecommendedPage, p)} />
+              <Pagination
+                totalPages={recommendedTotal}
+                currentPage={recommendedPage}
+                setPage={(p) => goTo(setRecommendedPage, p)}
+              />
             )}
           </section>
         </>
@@ -406,26 +451,34 @@ const Home = () => {
 
       {/* FOOTER */}
       <footer className="text-center py-6 border-t border-neutral-85 dark:border-neutral-40 text-sm text-neutral-50 dark:text-neutral-70">
-        © {new Date().getFullYear()} <span className="text-blue-60 font-semibold">DriveMatch</span>. All Rights Reserved.
+        © {new Date().getFullYear()}{" "}
+        <span className="text-blue-60 font-semibold">DriveMatch</span>. All
+        Rights Reserved.
       </footer>
-
     </div>
   );
 };
 
-// VEHICLE GRID
+// ------------------ VEHICLE GRID ------------------
 const VehicleGrid = ({ loading, vehicles, handleImageError }) => {
   if (loading)
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="animate-pulse bg-neutral-90 dark:bg-neutral-30 h-56 rounded-xl" />
+          <div
+            key={i}
+            className="animate-pulse bg-neutral-90 dark:bg-neutral-30 h-56 rounded-xl"
+          />
         ))}
       </div>
     );
 
   if (!vehicles || vehicles.length === 0)
-    return <p className="text-center text-neutral-50 dark:text-neutral-70 text-lg">No vehicles found.</p>;
+    return (
+      <p className="text-center text-neutral-50 dark:text-neutral-70 text-lg">
+        No vehicles found.
+      </p>
+    );
 
   return (
     <AnimatePresence>
@@ -438,14 +491,26 @@ const VehicleGrid = ({ loading, vehicles, handleImageError }) => {
             whileHover={{ scale: 1.03 }}
             className="bg-lg dark:bg-neutral-20 border border-neutral-85 dark:border-neutral-40 rounded-2xl shadow-md hover:shadow-xl transition p-4 flex flex-col"
           >
-            <img src={v.image || "/placeholder.jpg"} onError={handleImageError} className="w-full h-40 object-cover rounded-xl" alt={v.name} />
+            <img
+              src={v.image || "/placeholder.jpg"}
+              onError={handleImageError}
+              className="w-full h-40 object-cover rounded-xl"
+              alt={v.name}
+            />
 
-            <h4 className="text-lg font-bold text-neutral-20 dark:text-neutral-90 mt-3">{v.name}</h4>
+            <h4 className="text-lg font-bold text-neutral-20 dark:text-neutral-90 mt-3">
+              {v.name}
+            </h4>
             <p className="text-neutral-40 dark:text-neutral-60">{v.brand}</p>
 
-            <p className="text-blue-60 dark:text-blue-40 font-semibold text-lg mt-1">₹{v.price?.toLocaleString()}</p>
+            <p className="text-blue-60 dark:text-blue-40 font-semibold text-lg mt-1">
+              ₹{v.price?.toLocaleString()}
+            </p>
 
-            <Link to={`/vehicle/${v._id}`} className="mt-4 bg-blue-60 hover:bg-blue-70 text-lg py-2 rounded-lg text-center border-2 transition font-medium hover:bg-slate-500">
+            <Link
+              to={`/vehicle/${v._id}`}
+              className="mt-4 bg-blue-60 hover:bg-blue-70 text-lg py-2 rounded-lg text-center border-2 transition font-medium hover:bg-slate-500"
+            >
               View Details
             </Link>
           </motion.div>
@@ -455,7 +520,7 @@ const VehicleGrid = ({ loading, vehicles, handleImageError }) => {
   );
 };
 
-// PAGINATION
+// ------------------ PAGINATION ------------------
 const Pagination = ({ totalPages, currentPage, setPage }) => {
   if (!totalPages || totalPages <= 1) return null;
   const pages = Array.from({ length: totalPages }).map((_, i) => i + 1);
@@ -465,7 +530,11 @@ const Pagination = ({ totalPages, currentPage, setPage }) => {
       <button
         onClick={() => setPage(Math.max(1, currentPage - 1))}
         disabled={currentPage === 1}
-        className={`px-4 py-2 rounded-lg text-sm border ${currentPage === 1 ? "opacity-40 cursor-not-allowed border-neutral-60" : "hover:bg-blue-60 hover:text-white border-neutral-80 dark:border-neutral-40"}`}
+        className={`px-4 py-2 rounded-lg text-sm border ${
+          currentPage === 1
+            ? "opacity-40 cursor-not-allowed border-neutral-60"
+            : "hover:bg-blue-60 hover:text-white border-neutral-80 dark:border-neutral-40"
+        }`}
       >
         Prev
       </button>
@@ -474,7 +543,11 @@ const Pagination = ({ totalPages, currentPage, setPage }) => {
         <button
           key={p}
           onClick={() => setPage(p)}
-          className={`px-3 py-2 rounded-lg text-sm border transition ${currentPage === p ? "bg-blue-60 text-white border-blue-60" : "border-neutral-80 dark:border-neutral-40 hover:bg-neutral-90 dark:hover:bg-neutral-30"}`}
+          className={`px-3 py-2 rounded-lg text-sm border transition ${
+            currentPage === p
+              ? "bg-blue-60 text-white border-blue-60"
+              : "border-neutral-80 dark:border-neutral-40 hover:bg-neutral-90 dark:hover:bg-neutral-30"
+          }`}
         >
           {p}
         </button>
@@ -483,7 +556,11 @@ const Pagination = ({ totalPages, currentPage, setPage }) => {
       <button
         onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
         disabled={currentPage === totalPages}
-        className={`px-4 py-2 rounded-lg text-sm border ${currentPage === totalPages ? "opacity-40 cursor-not-allowed border-neutral-60" : "hover:bg-blue-60 hover:text-white border-neutral-80 dark:border-neutral-40"}`}
+        className={`px-4 py-2 rounded-lg text-sm border ${
+          currentPage === totalPages
+            ? "opacity-40 cursor-not-allowed border-neutral-60"
+            : "hover:bg-blue-60 hover:text-white border-neutral-80 dark:border-neutral-40"
+        }`}
       >
         Next
       </button>

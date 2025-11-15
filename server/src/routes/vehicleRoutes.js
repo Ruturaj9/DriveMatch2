@@ -4,7 +4,7 @@ import Vehicle from "../models/Vehicle.js";
 const router = express.Router();
 
 /* ==========================================================
-   🌱 POST: Bulk Insert Vehicles (NO DELETE — APPEND ONLY)
+   🌱 POST: Bulk Insert Vehicles (APPEND ONLY)
    ========================================================== */
 router.post("/seed", async (req, res) => {
   try {
@@ -16,9 +16,8 @@ router.post("/seed", async (req, res) => {
 
     console.log(`Received ${req.body.length} vehicles to insert...`);
 
-    // Insert vehicles — ignore errors, continue inserting others
     const inserted = await Vehicle.insertMany(req.body, {
-      ordered: false, // continues even if some fail (duplicates etc.)
+      ordered: false, // Continue if duplicates
     });
 
     res.json({
@@ -26,7 +25,6 @@ router.post("/seed", async (req, res) => {
       insertedCount: inserted.length,
     });
   } catch (err) {
-    // Handle duplicate or partial insert errors
     if (err.writeErrors) {
       return res.json({
         message: "Some vehicles inserted (duplicates skipped).",
@@ -40,7 +38,7 @@ router.post("/seed", async (req, res) => {
 });
 
 /* ==========================================================
-   🟢 POST: Add new vehicle (single insert)
+   🟢 POST: Add a new vehicle
    ========================================================== */
 router.post("/", async (req, res) => {
   try {
@@ -52,7 +50,7 @@ router.post("/", async (req, res) => {
 });
 
 /* ==========================================================
-   🔵 GET: Get all vehicles (with filters)
+   🔵 GET: All vehicles with optional filters
    ========================================================== */
 router.get("/", async (req, res) => {
   try {
@@ -77,17 +75,16 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
-   🔥 GET: Trending vehicles (supports ?limit=100)
+   🔥 GET: Trending vehicles (?limit=100 default)
    ========================================================== */
 router.get("/trending", async (req, res) => {
   try {
-    // Accept ?limit=100 (default: 100)
     const limit = req.query.limit ? Number(req.query.limit) : 100;
-
-    // Prevent overload → cap to max 300
     const safeLimit = Math.min(limit, 300);
 
-    const trendingVehicles = await Vehicle.find({ isTrending: true }).limit(safeLimit);
+    const trendingVehicles = await Vehicle.find({ isTrending: true }).limit(
+      safeLimit
+    );
 
     res.json(trendingVehicles);
   } catch (err) {
@@ -95,9 +92,8 @@ router.get("/trending", async (req, res) => {
   }
 });
 
-
 /* ==========================================================
-   🔍 GET: Single Vehicle Details
+   🔍 GET: Vehicle by ID
    ========================================================== */
 router.get("/:id", async (req, res) => {
   try {
@@ -157,7 +153,8 @@ function calculateSimilarity(base, cand) {
 }
 
 /* ==========================================================
-   🧠 GET: Smart Technical Similar Vehicles
+   🧠 SMART SIMILAR VEHICLES — FULL FIELD VERSION
+   (Fixes your issue: similar vehicles now include ALL fields)
    ========================================================== */
 router.get("/similar/:id", async (req, res) => {
   try {
@@ -175,9 +172,8 @@ router.get("/similar/:id", async (req, res) => {
       fuelType: baseVehicle.fuelType,
       transmission: baseVehicle.transmission,
     })
-      .select(
-        "name brand type price enginePower torque mileage fuelType transmission performanceScore ecoScore bodyType image"
-      )
+      // IMPORTANT: return ALL fields so comparison table works
+      .select("-__v")
       .limit(300);
 
     const scored = candidates.map((vehicle) => ({
@@ -200,13 +196,15 @@ router.get("/similar/:id", async (req, res) => {
 });
 
 /* ==========================================================
-   ⚖️ POST: Compare vehicles by IDs
+   ⚖️ Compare vehicles by IDs
    ========================================================== */
 router.post("/compare", async (req, res) => {
   try {
     const { ids } = req.body;
     if (!ids || ids.length < 2)
-      return res.status(400).json({ message: "Need at least 2 vehicle IDs." });
+      return res
+        .status(400)
+        .json({ message: "Need at least 2 vehicle IDs." });
 
     const vehicles = await Vehicle.find({ _id: { $in: ids } });
 

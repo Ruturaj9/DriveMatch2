@@ -16,6 +16,7 @@ const Navbar = () => {
     { name: "Home", path: "/" },
     { name: "Compare", path: "/compare" },
     { name: "Insights", path: "/insights" },
+    { name: "History", path: "/history" },
     { name: "About", path: "/about" },
   ];
 
@@ -69,15 +70,15 @@ const Navbar = () => {
             className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all
               ${
                 theme === "dark"
-                  ? "border-neutral-500 bg-neutral-800 hover:bg-orange-950 hover:border-orange-300 hover:shadow-[0_0_12px_rgba(250,204,21,0.60)]"
-                  : "border-neutral-500 bg-neutral-200 hover:bg-stone-600 hover:text-zinc-950 hover:border-zinc-950 hover:shadow-[0_0_12px_rgba(82,82,82,0.80)]"
+                  ? "border-neutral-500 bg-neutral-800 hover:bg-orange-950 hover:border-orange-300 hover:shadow-[0_0_24px_rgba(250,204,21,2)]"
+                  : "border-neutral-500 bg-neutral-200 hover:bg-stone-600  hover:border-white hover:shadow-[0_0_24px_rgba(0,0,0,2)]"
               }
               backdrop-blur-md active:scale-95`}
           >
             {theme === "dark" ? (
               <Sun className="w-5 h-5 text-orange-300 transition-transform duration-500 hover:rotate-[360deg]" />
             ) : (
-              <Moon className="w-5 h-6 text-gray-700 transition-transform duration-500 hover:rotate-[360deg]" />
+              <Moon className="w-5 h-6 text-neutral-600 transition-transform duration-500 hover:rotate-[360deg] hover:text-white/80" />
             )}
           </button>
         </div>

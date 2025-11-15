@@ -10,12 +10,14 @@ import VehicleCard from "../components/VehicleCard";
 
 const VehicleDetails = () => {
   const { id } = useParams();
-  const { addVehicleToRoom } = useContext(CompareContext);
+  const { addVehicleToRoom, rooms } = useContext(CompareContext);
 
   const [vehicle, setVehicle] = useState(null);
   const [similar, setSimilar] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRoom, setSelectedRoom] = useState(1);
+
+  // UI selected room
+  const [selectedRoom, setSelectedRoom] = useState("1");
 
   useEffect(() => {
     const fetch = async () => {
@@ -37,27 +39,56 @@ const VehicleDetails = () => {
     fetch();
   }, [id]);
 
+  // 👉 Toast helper
+  const showToast = (msg, error = false) => {
+    const toast = document.createElement("div");
+    toast.textContent = msg;
+    toast.className =
+      `fixed bottom-6 right-6 px-4 py-2 rounded-lg shadow-lg animate-fade-in-out text-sm z-[9999] ${
+        error ? "bg-red-600" : "bg-blue-600"
+      } text-white`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+  };
+
+  // 👉 Add to compare with result handling
   const handleAddToCompare = () => {
     if (!vehicle) return;
 
-    addVehicleToRoom(selectedRoom, vehicle);
+    const result = addVehicleToRoom(String(selectedRoom), vehicle);
 
-    const toast = document.createElement("div");
-    toast.textContent = `${vehicle.name} added to Room ${selectedRoom}`;
-    toast.className =
-      "fixed bottom-6 right-6 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg animate-fade-in-out text-sm z-[9999]";
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2600);
+    if (!result.ok) {
+      if (result.error === "TYPE_MISMATCH") {
+        const existing = rooms[selectedRoom]?.[0]?.type?.toUpperCase() || "Unknown";
+
+        showToast(
+          `❌ Cannot add. "${vehicle.type}" cannot be compared with "${existing}".`,
+          true
+        );
+      } else {
+        showToast("Failed to add vehicle.", true);
+      }
+      return;
+    }
+
+    showToast(`${vehicle.name} added to Room ${selectedRoom}`);
   };
 
+  // 🖼 fallback image
   const handleImageError = (e) => (e.target.src = "/placeholder.jpg");
+
+  // 🔍 UI helper to check if room is compatible
+  const isRoomCompatible = (roomVehicles) => {
+    if (!roomVehicles || roomVehicles.length === 0) return true;
+    return (
+      roomVehicles[0].type?.toLowerCase() === vehicle?.type?.toLowerCase()
+    );
+  };
 
   if (loading)
     return (
-      <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] flex flex-col items-center justify-center gap-4 px-6">
-        <div className="animate-pulse bg-[var(--color-text)]/20 w-2/3 h-10 rounded-lg" />
-        <div className="animate-pulse bg-[var(--color-text)]/20 w-1/2 h-6 rounded-lg" />
-        <div className="animate-pulse bg-[var(--color-text)]/20 w-2/3 h-80 rounded-2xl" />
+      <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] flex items-center justify-center">
+        Loading...
       </div>
     );
 
@@ -72,7 +103,7 @@ const VehicleDetails = () => {
     <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] py-10 transition-colors">
       <div className="max-w-6xl mx-auto px-6">
 
-        {/* IMAGE + MAIN DETAILS */}
+        {/* IMAGE + MAIN */}
         <motion.div
           initial={{ opacity: 0, y: 25 }}
           animate={{ opacity: 1, y: 0 }}
@@ -91,7 +122,7 @@ const VehicleDetails = () => {
               {vehicle.name}
             </h1>
 
-            <p className="text-[var(--color-text)]/70 text-lg">
+            <p className="opacity-80 text-lg">
               {vehicle.brand} • {vehicle.type?.toUpperCase()}
             </p>
 
@@ -108,18 +139,26 @@ const VehicleDetails = () => {
               <Spec icon={Zap} label="Performance" value={vehicle.performanceScore} />
             </div>
 
-            {/* COMPARE */}
+            {/* COMPARE SECTION */}
             <div className="mt-3 flex items-center gap-3">
               <select
                 value={selectedRoom}
-                onChange={(e) => setSelectedRoom(Number(e.target.value))}
+                onChange={(e) => setSelectedRoom(e.target.value)}
                 className="border border-[var(--color-text)]/30 bg-[var(--color-bg)] rounded-lg px-3 py-2 text-sm"
               >
-                {[1, 2, 3, 4, 5].map((r) => (
-                  <option key={r} value={r}>
-                    Room {r}
-                  </option>
-                ))}
+                {Object.keys(rooms).map((r) => {
+                  const roomVehicles = rooms[r];
+                  const first = roomVehicles[0];
+                  const typeLabel = first ? first.type.toUpperCase() : "Empty";
+                  const disabled = !isRoomCompatible(roomVehicles);
+
+                  return (
+                    <option key={r} value={r} disabled={disabled}>
+                      Room {r} ({typeLabel})
+                      {disabled ? " - Not compatible" : ""}
+                    </option>
+                  );
+                })}
               </select>
 
               <button
@@ -169,14 +208,15 @@ const VehicleDetails = () => {
 
       {/* FOOTER */}
       <footer className="text-center py-6 mt-12 opacity-70 text-sm">
-        © {new Date().getFullYear()} <span className="font-semibold text-blue-600">DriveMatch</span>. All Rights Reserved.
+        © {new Date().getFullYear()}{" "}
+        <span className="font-semibold text-blue-600">DriveMatch</span>. All Rights Reserved.
       </footer>
     </div>
   );
 };
 
 /* ------------------------------------------
-   SMALL SPEC CELL COMPONENT
+   SMALL SPEC CELL
 -------------------------------------------- */
 const Spec = ({ icon: Icon, label, value }) => (
   <div className="flex items-center gap-2 text-sm">
@@ -185,37 +225,19 @@ const Spec = ({ icon: Icon, label, value }) => (
 );
 
 /* ------------------------------------------
-   COMPARISON TABLE COMPONENT
+   COMPARISON TABLE
 -------------------------------------------- */
 const ComparisonTable = ({ vehicle, similar }) => {
   const fields = [
     ["Brand", "brand"],
     ["Type", "type"],
-    ["Variant", "variant"],
-    ["Model Year", "modelYear"],
     ["Price", "price", (v) => `₹${v?.toLocaleString()}`],
-    ["On-Road Price", "onRoadPrice", (v) => (v ? `₹${v.toLocaleString()}` : "N/A")],
     ["Engine", "engine"],
     ["Engine Power", "enginePower"],
     ["Torque", "torque"],
-    ["Fuel Type", "fuelType"],
     ["Mileage", "mileage"],
     ["Transmission", "transmission"],
-    ["Drive Type", "driveType"],
-    ["Top Speed", "topSpeed"],
-    ["Acceleration", "acceleration"],
-    ["Emission Norm", "emissionNorm"],
-    ["Charging Time", "chargingTime"],
-    ["Battery Capacity", "batteryCapacity"],
-    ["Seating Capacity", "seatingCapacity"],
-    ["Boot Space", "bootSpace"],
-    ["Fuel Tank Capacity", "fuelTankCapacity"],
-    ["Kerb Weight", "kerbWeight"],
-    ["Ground Clearance", "groundClearance"],
-    ["Wheelbase", "wheelbase"],
     ["Performance Score", "performanceScore"],
-    ["Eco Score", "ecoScore"],
-    ["Status", "availabilityStatus"],
   ];
 
   return (
@@ -231,7 +253,7 @@ const ComparisonTable = ({ vehicle, similar }) => {
         <table className="min-w-[950px] w-full text-sm">
           <thead>
             <tr className="bg-[var(--color-text)]/10">
-              <th className="py-3 px-4 font-semibold w-48">Specification</th>
+              <th className="py-3 px-4 font-semibold w-48">Spec</th>
               <th className="py-3 px-4 font-semibold text-blue-600">{vehicle.name}</th>
 
               {similar.map((v) => (

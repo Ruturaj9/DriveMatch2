@@ -5,4 +5,5 @@ export const CompareContext = createContext({
   addVehicleToRoom: () => {},
   removeVehicleFromRoom: () => {},
   clearRoom: () => {},
+  createNewRoom: () => {},
 });
