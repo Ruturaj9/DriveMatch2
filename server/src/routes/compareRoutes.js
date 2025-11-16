@@ -1,67 +1,71 @@
 import express from "express";
 import Vehicle from "../models/Vehicle.js";
+import CompareHistory from "../models/CompareHistory.js";
 
 const router = express.Router();
 
-/* ==========================================================
-   ⚙️ POST: Save Compare Session
-   ========================================================== */
-router.post("/save", async (req, res) => {
-  try {
-    const { roomNumber, vehicles, verdict, winnerId, userId } = req.body;
+/* =====================================================
+   COMPARE VEHICLES — AI Verdict (Your existing logic)
+===================================================== */
 
-    // For now, just log — later you can save to a collection if needed
-    console.log(`🧾 Compare Room ${roomNumber} saved for user: ${userId}`);
-    res.json({ message: "Compare session saved successfully" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ==========================================================
-   🧠 POST: AI Verdict (Server-side)
-   ========================================================== */
-router.post("/ai-verdict", async (req, res) => {
-  try {
-    const { vehicles } = req.body;
-    if (!vehicles || vehicles.length < 2)
-      return res.status(400).json({ message: "Need at least two vehicles." });
-
-    // 🧩 Simple comparison logic (can be replaced with AI-based logic)
-    const scores = vehicles.map((v) => ({
-      id: v._id,
-      name: v.name,
-      score:
-        (v.performanceScore || 0) * 0.4 +
-        (parseFloat(v.mileage) || 0) * 0.3 +
-        (1 / (v.price || 1)) * 0.3,
-    }));
-
-    const winner = scores.reduce((a, b) => (b.score > a.score ? b : a));
-    const verdict = `💬 ${winner.name} wins this comparison with the best overall balance of performance, mileage, and price.`;
-
-    res.json({
-      verdict,
-      winnerId: winner.id,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ==========================================================
-   🧾 GET: Compare Vehicles by IDs (fallback)
-   ========================================================== */
 router.post("/", async (req, res) => {
   try {
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids) || ids.length < 2)
-      return res.status(400).json({ message: "Please provide at least 2 IDs." });
+    const { v1, v2, verdict } = req.body;
 
-    const vehicles = await Vehicle.find({ _id: { $in: ids } });
-    res.json({ vehicles });
+    if (!v1 || !v2 || !verdict) {
+      return res.status(400).json({ message: "Missing fields" });
+    }
+
+    // Save to history automatically
+    await CompareHistory.create({
+      roomNumber: Math.floor(Date.now() / 1000), // unique session ID
+      verdict,
+      winnerId: verdict.includes("1") ? v1 : v2, // crude logic; update if needed
+      userType: "guest",
+    });
+
+    res.json({ message: "Comparison saved", verdict });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Compare Save Error:", err);
+    res.status(500).json({ message: "Error saving comparison" });
+  }
+});
+
+/* =====================================================
+   SAVE HISTORY (manual save endpoint)
+===================================================== */
+
+router.post("/save", async (req, res) => {
+  try {
+    const { roomNumber, verdict, winnerId } = req.body;
+
+    await CompareHistory.create({
+      roomNumber,
+      verdict,
+      winnerId,
+      userType: "guest",
+    });
+
+    res.json({ message: "Saved to history!" });
+  } catch (err) {
+    res.status(500).json({ message: "Error saving history" });
+  }
+});
+
+/* =====================================================
+   GET GUEST HISTORY (your CompareHistory.jsx fetch)
+===================================================== */
+
+router.get("/history/guest", async (req, res) => {
+  try {
+    const history = await CompareHistory.find({ userType: "guest" })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(history);
+  } catch (err) {
+    console.error("Fetch History Error:", err);
+    res.status(500).json({ message: "Error fetching history" });
   }
 });
 

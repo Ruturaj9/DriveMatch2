@@ -1,12 +1,12 @@
 import { useContext } from "react";
+import axios from "axios";
 import { CompareContext } from "../context/CompareContext";
 import {
   Car,
   Fuel,
   Zap,
   Settings,
-  DollarSign,
-  Trophy,
+  DollarSign
 } from "lucide-react";
 
 const parseNumber = (val) => {
@@ -63,14 +63,26 @@ const Compare = () => {
         parseNumber(b.performanceScore) - parseNumber(a.performanceScore)
     )[0];
 
+    // Decide overall winner
+    const counts = {};
+    [bestBudget, bestMileage, bestPerformance].forEach((winner) => {
+      if (winner) {
+        counts[winner._id] = (counts[winner._id] || 0) + 1;
+      }
+    });
+
+    const overallWinnerId = Object.entries(counts).sort(
+      (a, b) => b[1] - a[1]
+    )[0][0];
+
     return {
       bestBudget,
       bestMileage,
       bestPerformance,
+      overallWinnerId
     };
   };
 
-  // NEW: Additional fields to extend table
   const extraFields = [
     ["Variant", "variant"],
     ["Model Year", "modelYear"],
@@ -88,6 +100,33 @@ const Compare = () => {
     ["Wheelbase", "wheelbase"],
     ["Body Type", "bodyType"],
   ];
+
+  const saveHistory = async (roomId, vehicles, winners) => {
+    try {
+      const winnerVehicle = vehicles.find(
+        (v) => v._id === winners.overallWinnerId
+      );
+
+      const verdict = `
+Comparison Result:
+• Budget Winner: ${winners.bestBudget?.name}
+• Mileage Winner: ${winners.bestMileage?.name}
+• Performance Winner: ${winners.bestPerformance?.name}
+🏆 Overall Winner: ${winnerVehicle?.name}
+      `.trim();
+
+      await axios.post("http://localhost:5000/api/compare", {
+        v1: vehicles[0]?._id,
+        v2: vehicles[1]?._id,
+        verdict,
+      });
+
+      showToast("Comparison saved to history!");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to save history", true);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] px-6 py-10 transition">
@@ -150,13 +189,27 @@ const Compare = () => {
                       <p className="font-semibold mb-1">🏆 Winner Summary</p>
 
                       <div className="flex flex-wrap gap-3">
-                        <p>💰 <b>Budget Winner:</b> {winners.bestBudget?.name}</p>
-                        <p>⛽ <b>Mileage Winner:</b> {winners.bestMileage?.name}</p>
-                        <p>⚡ <b>Performance Winner:</b> {winners.bestPerformance?.name}</p>
+                        <p>💰 <b>Budget:</b> {winners.bestBudget?.name}</p>
+                        <p>⛽ <b>Mileage:</b> {winners.bestMileage?.name}</p>
+                        <p>⚡ <b>Performance:</b> {winners.bestPerformance?.name}</p>
+                        <p>🏆 <b>Overall:</b> {
+                          vehicles.find((v) => v._id === winners.overallWinnerId)?.name
+                        }</p>
                       </div>
+
+                      {/* Save History Button */}
+                      <button
+                        onClick={() =>
+                          saveHistory(roomId, vehicles, winners)
+                        }
+                        className="mt-3 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+                      >
+                        Save to History
+                      </button>
                     </div>
                   )}
 
+                  {/* Cards */}
                   <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-6">
                     {vehicles.map((v) => (
                       <div
@@ -193,6 +246,7 @@ const Compare = () => {
                     ))}
                   </div>
 
+                  {/* SPEC TABLE */}
                   {vehicles.length > 1 && (
                     <div className="overflow-x-auto border rounded-xl bg-[var(--color-bg)] shadow">
                       <table className="w-full text-sm">
@@ -208,7 +262,6 @@ const Compare = () => {
                         </thead>
 
                         <tbody>
-                          {/* ORIGINAL SPECS */}
                           <tr>
                             <td className="p-3 font-medium flex items-center gap-2">
                               <Car size={16} /> Brand
@@ -273,9 +326,6 @@ const Compare = () => {
                             ))}
                           </tr>
 
-                          {/* -----------------------------------------------
-                               EXTRA 15 SPECIFICATIONS (ADDED BELOW)
-                             ----------------------------------------------- */}
                           {extraFields.map(([label, key]) => (
                             <tr key={key}>
                               <td className="p-3 font-medium">{label}</td>
@@ -287,11 +337,11 @@ const Compare = () => {
                               ))}
                             </tr>
                           ))}
-
                         </tbody>
                       </table>
                     </div>
                   )}
+
                 </>
               )}
             </div>
@@ -308,7 +358,6 @@ const Compare = () => {
             animation: fadeInOut 2.5s ease forwards;
           }
         `}</style>
-
       </div>
     </div>
   );

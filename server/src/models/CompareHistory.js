@@ -2,23 +2,12 @@ import mongoose from "mongoose";
 
 const compareHistorySchema = new mongoose.Schema(
   {
-    roomNumber: { type: String, required: true },
-    vehicles: [
-      {
-        _id: { type: mongoose.Schema.Types.ObjectId, ref: "Vehicle" },
-        name: String,
-        brand: String,
-        price: Number,
-        mileage: String,
-        performanceScore: Number,
-      },
-    ],
-    verdict: { type: String, required: true },
-    winnerId: { type: mongoose.Schema.Types.ObjectId, ref: "Vehicle" },
-    userId: { type: String, default: "guest" }, // placeholder for future login
+    roomNumber: { type: Number, required: true },     // Any room/session id or auto-increment
+    verdict: { type: String, required: true },        // ChatGPT’s summary/winner
+    winnerId: { type: String },                       // Vehicle winner id
+    userType: { type: String, default: "guest" },     // guest or logged in user
   },
   { timestamps: true }
 );
 
-const CompareHistory = mongoose.model("CompareHistory", compareHistorySchema);
-export default CompareHistory;
+export default mongoose.model("CompareHistory", compareHistorySchema);
