@@ -8,7 +8,6 @@ const router = express.Router();
 
 /* ==========================================================
    SAVE COMPARISON – Logged-in users only
-   POST /api/compare/
 ========================================================== */
 router.post("/", authMiddleware, async (req, res) => {
   try {
@@ -30,9 +29,7 @@ router.post("/", authMiddleware, async (req, res) => {
     await CompareHistory.create({
       userId: req.user.id,
       userType: "user",
-
       roomNumber: Math.floor(Date.now() / 1000),
-
       vehicles: [
         {
           _id: veh1._id,
@@ -57,7 +54,6 @@ router.post("/", authMiddleware, async (req, res) => {
           performanceScore: veh2.performanceScore,
         },
       ],
-
       winnerId,
       verdict,
     });
@@ -70,66 +66,40 @@ router.post("/", authMiddleware, async (req, res) => {
 });
 
 /* ==========================================================
-   MANUAL SAVE (ALSO AUTH REQUIRED)
+   MANUAL SAVE (Prevent Duplicates)
 ========================================================== */
 router.post("/save", authMiddleware, async (req, res) => {
   try {
-    const { roomNumber, verdict, winnerId, vehicles, v1, v2 } = req.body;
+    const { roomNumber, verdict, winnerId, vehicles } = req.body;
 
-    if (!verdict) {
-      return res.status(400).json({ message: "Verdict required" });
+    if (!verdict || !Array.isArray(vehicles) || vehicles.length < 2) {
+      return res.status(400).json({ message: "Invalid comparison data" });
     }
 
-    let vehiclesToStore = [];
+    const vehicleIds = vehicles.map(v => String(v._id)).sort();
 
-    // If the frontend sends the full objects
-    if (Array.isArray(vehicles) && vehicles.length >= 1) {
-      vehiclesToStore = vehicles.map((v) => ({
-        _id: v._id,
-        name: v.name,
-        brand: v.brand,
-        type: v.type,
-        price: v.price,
-        image: v.image,
-        mileage: v.mileage,
-        enginePower: v.enginePower,
-        performanceScore: v.performanceScore,
-      }));
-    }
-    // Fallback: if frontend sent v1/v2 ids
-    else if (v1 && v2) {
-      const [veh1, veh2] = await Promise.all([
-        Vehicle.findById(v1).lean(),
-        Vehicle.findById(v2).lean(),
-      ]);
+    const existing = await CompareHistory.find({
+      userId: req.user.id,
+      userType: "user",
+      "vehicles._id": { $all: vehicleIds },
+      $expr: { $eq: [{ $size: "$vehicles" }, vehicleIds.length] }
+    });
 
-      if (!veh1 || !veh2) {
-        return res.status(404).json({ message: "Vehicle not found" });
-      }
+    const isDuplicate = existing.some(entry => {
+      const ids = entry.vehicles.map(v => String(v._id)).sort();
+      return ids.every((id, i) => id === vehicleIds[i]);
+    });
 
-      const compact = (v) => ({
-        _id: v._id,
-        name: v.name,
-        brand: v.brand,
-        type: v.type,
-        price: v.price,
-        image: v.image,
-        mileage: v.mileage,
-        enginePower: v.enginePower,
-        performanceScore: v.performanceScore,
-      });
-
-      vehiclesToStore = [compact(veh1), compact(veh2)];
-    } else {
-      return res.status(400).json({ message: "Provide vehicles or ids" });
+    if (isDuplicate) {
+      return res.status(200).json({ message: "Already saved" });
     }
 
     await CompareHistory.create({
       userId: req.user.id,
       userType: "user",
       roomNumber: roomNumber || Math.floor(Date.now() / 1000),
-      vehicles: vehiclesToStore,
-      winnerId: winnerId || vehiclesToStore[0]._id,
+      vehicles,
+      winnerId: winnerId || vehicles[0]._id,
       verdict,
     });
 
@@ -141,7 +111,7 @@ router.post("/save", authMiddleware, async (req, res) => {
 });
 
 /* ==========================================================
-   GET USER HISTORY (NO GUEST)
+   GET USER HISTORY
 ========================================================== */
 router.get("/history", authMiddleware, async (req, res) => {
   try {
@@ -160,7 +130,7 @@ router.get("/history", authMiddleware, async (req, res) => {
 });
 
 /* ==========================================================
-   DELETE SINGLE HISTORY (Only user's own)
+   DELETE SINGLE HISTORY
 ========================================================== */
 router.delete("/history/:id", authMiddleware, async (req, res) => {
   try {
@@ -181,7 +151,7 @@ router.delete("/history/:id", authMiddleware, async (req, res) => {
 });
 
 /* ==========================================================
-   CLEAR ALL HISTORY (Only for this user)
+   CLEAR ALL HISTORY FOR USER
 ========================================================== */
 router.delete("/history", authMiddleware, async (req, res) => {
   try {

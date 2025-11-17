@@ -12,53 +12,38 @@ export const CompareProvider = ({ children }) => {
     }
   });
 
-  // ---------------------------------------------------------
-  // 🧹 Remove empty rooms automatically (except Room 1)
-  // ---------------------------------------------------------
   const cleanRooms = (roomsObj) => {
     const cleaned = {};
-
     Object.keys(roomsObj)
       .sort((a, b) => Number(a) - Number(b))
       .forEach((key, index) => {
         const room = roomsObj[key];
-        // Keep Room 1 even if empty
         if (index === 0) {
           cleaned["1"] = room;
         } else if (room.length > 0) {
           cleaned[String(Object.keys(cleaned).length + 1)] = room;
         }
       });
-
-    // Ensure at least one room exists
     if (!cleaned["1"]) cleaned["1"] = [];
-
     return cleaned;
   };
 
-  // ---------------------------------------------------------
-  // 🔄 Sync with localStorage
-  // ---------------------------------------------------------
   useEffect(() => {
     localStorage.setItem("compareRooms", JSON.stringify(rooms));
   }, [rooms]);
 
-  // ---------------------------------------------------------
-  // ➕ Create new room
-  // ---------------------------------------------------------
   const createNewRoom = () => {
-    setRooms((prev) => {
-      const newIndex = String(Object.keys(prev).length + 1);
-      return {
-        ...prev,
-        [newIndex]: [],
-      };
-    });
+    let newIndex = 1;
+    while (rooms[String(newIndex)]) {
+      newIndex++;
+    }
+    setRooms((prev) => ({
+      ...prev,
+      [String(newIndex)]: [],
+    }));
+    return String(newIndex);
   };
 
-  // ---------------------------------------------------------
-  // 🧠 Find room by vehicle type (auto-place feature)
-  // ---------------------------------------------------------
   const findRoomWithType = (type) => {
     const keys = Object.keys(rooms);
     for (let key of keys) {
@@ -70,48 +55,30 @@ export const CompareProvider = ({ children }) => {
     return null;
   };
 
-  // ---------------------------------------------------------
-  // 🛑 Validate type compatibility
-  // ---------------------------------------------------------
   const canAddToRoom = (roomNumber, vehicle) => {
     const room = rooms[roomNumber] || [];
-
     if (room.length === 0) return true;
-
     const existingType = room[0].type?.toLowerCase();
     const newType = vehicle.type?.toLowerCase();
-
     return existingType === newType;
   };
 
-  // ---------------------------------------------------------
-  // ➕ Add vehicle to room with:
-  //    ✔ type validation
-  //    ✔ auto-place in matching type room
-  //    ✔ auto-clean rooms
-  // ---------------------------------------------------------
-  const addVehicleToRoom = (roomNumber, vehicle) => {
+  const addVehicleToRoom = (roomNumber, vehicle, skipAuto = false) => {
     if (!vehicle?._id) return { ok: false, error: "INVALID" };
 
     const vehicleType = vehicle.type?.toLowerCase();
 
-    // 1️⃣ Auto place: If same type room exists, use that
-    const autoRoom = findRoomWithType(vehicleType);
-    if (autoRoom && autoRoom !== String(roomNumber)) {
-      roomNumber = autoRoom;
-    }
-
-    // 2️⃣ Validate type
-    if (!canAddToRoom(roomNumber, vehicle)) {
-      return { ok: false, error: "TYPE_MISMATCH" };
+    if (!skipAuto) {
+      const autoRoom = findRoomWithType(vehicleType);
+      if (autoRoom && autoRoom !== String(roomNumber)) {
+        roomNumber = autoRoom;
+      }
     }
 
     setRooms((prev) => {
       const updated = structuredClone(prev);
-
       if (!updated[roomNumber]) updated[roomNumber] = [];
 
-      // avoid duplicates
       if (!updated[roomNumber].some((v) => v._id === vehicle._id)) {
         updated[roomNumber].push(vehicle);
       }
@@ -122,21 +89,14 @@ export const CompareProvider = ({ children }) => {
     return { ok: true };
   };
 
-  // ---------------------------------------------------------
-  // ➖ Remove vehicle + clean empty rooms
-  // ---------------------------------------------------------
   const removeVehicleFromRoom = (roomNumber, id) => {
     setRooms((prev) => {
       const updated = structuredClone(prev);
       updated[roomNumber] = updated[roomNumber].filter((v) => v._id !== id);
-
       return cleanRooms(updated);
     });
   };
 
-  // ---------------------------------------------------------
-  // 🧹 Clear entire room + clean layout
-  // ---------------------------------------------------------
   const clearRoom = (roomNumber) => {
     setRooms((prev) => {
       const updated = structuredClone(prev);

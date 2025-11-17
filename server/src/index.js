@@ -1,3 +1,4 @@
+// server/index.js
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -20,7 +21,10 @@ const PORT = process.env.PORT || 5000;
 connectDB();
 
 // 2️⃣ Middlewares
-app.use(cors());
+app.use(cors({
+  origin: "http://localhost:5173", // Adjust if frontend runs on another origin
+  credentials: true
+}));
 app.use(express.json());
 
 // 3️⃣ API Routes

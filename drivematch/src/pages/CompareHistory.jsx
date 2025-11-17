@@ -1,3 +1,4 @@
+// src/pages/CompareHistory.jsx
 import { useEffect, useState, useContext } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,12 +11,11 @@ const CompareHistory = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const { addVehicleToRoom, createNewRoom } = useContext(CompareContext);
+  const { addVehicleToRoom, createNewRoom, getRooms, rooms: roomsFromContext } =
+    useContext(CompareContext);
   const { theme } = useContext(ThemeContext);
-
   const navigate = useNavigate();
 
-  // Toast
   const toast = (msg, error = false) => {
     const t = document.createElement("div");
     t.textContent = msg;
@@ -28,65 +28,137 @@ const CompareHistory = () => {
     setTimeout(() => t.remove(), 2500);
   };
 
-  // Fetch history
+  const getRoomsSafe = () => {
+    try {
+      if (typeof getRooms === "function") return getRooms() || {};
+      if (roomsFromContext && typeof roomsFromContext === "object") return roomsFromContext;
+      return {};
+    } catch {
+      return roomsFromContext || {};
+    }
+  };
+
+  const fetchFullVehicle = async (v) => {
+    if (typeof v === "object") return v;
+    try {
+      const res = await axios.get(`http://localhost:5000/api/vehicles/${v}`);
+      return res.data;
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
-    axios
-      .get("http://localhost:5000/api/compare/history/guest")
-      .then((res) => setHistory(res.data || []))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        setLoading(true);
+        const res = await axios.get("http://localhost:5000/api/compare/history", {
+          withCredentials: true,
+        });
+        const enriched = await Promise.all(
+          res.data.map(async (entry) => {
+            const vehicles = await Promise.all(entry.vehicles.map(fetchFullVehicle));
+            return { ...entry, vehicles: vehicles.filter(Boolean) };
+          })
+        );
+
+        const seen = new Set();
+        const deduped = enriched.filter((entry) => {
+          const key = entry.vehicles.map((v) => v._id).sort().join("-");
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        if (!cancelled) setHistory(deduped);
+      } catch {
+        if (!cancelled) toast("Failed to load history", true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Delete single item
+  const sameSet = (a = [], b = []) => {
+    const A = a.map(String).sort();
+    const B = b.map(String).sort();
+    return A.length === B.length && A.every((x, i) => x === B[i]);
+  };
+
+  const viewAgain = async (entry) => {
+    try {
+      const vehicles = entry.vehicles;
+      if (!vehicles.length) return toast("Invalid history entry", true);
+
+      const ids = vehicles.map((v) => String(v._id));
+      const rooms = getRoomsSafe();
+
+      for (const key of Object.keys(rooms)) {
+        const roomIds = rooms[key].map((v) => String(v._id));
+        if (sameSet(roomIds, ids)) {
+          navigate("/compare");
+          return;
+        }
+      }
+
+      for (const key of Object.keys(rooms)) {
+        if (rooms[key].length === 0) {
+          vehicles.forEach((v) => addVehicleToRoom(key, v, true));
+          navigate("/compare");
+          return;
+        }
+      }
+
+      const newRoom = createNewRoom();
+      vehicles.forEach((v) => addVehicleToRoom(newRoom, v, true));
+      navigate("/compare");
+    } catch (err) {
+      toast("Failed to restore", true);
+    }
+  };
+
   const deleteOne = async (id) => {
     try {
-      await axios.delete(`http://localhost:5000/api/compare/history/${id}`);
+      await axios.delete(`http://localhost:5000/api/compare/history/${id}`, {
+        withCredentials: true,
+      });
       setHistory((prev) => prev.filter((h) => h._id !== id));
-      toast("Deleted from history");
-    } catch (err) {
+      toast("Deleted");
+    } catch {
       toast("Delete failed", true);
     }
   };
 
-  // Clear all
   const clearAll = async () => {
     try {
-      await axios.delete("http://localhost:5000/api/compare/history");
+      await axios.delete("http://localhost:5000/api/compare/history", {
+        withCredentials: true,
+      });
       setHistory([]);
       toast("All history cleared");
-    } catch (err) {
+    } catch {
       toast("Failed to clear", true);
     }
   };
 
-  // View comparison again
-  const viewAgain = (entry) => {
-    if (!Array.isArray(entry.vehicles)) {
-      toast("Old entry - No vehicles saved", true);
-      return;
-    }
-
-    const newRoom = createNewRoom();
-    entry.vehicles.forEach((v) => addVehicleToRoom(newRoom, v));
-
-    navigate("/compare");
-  };
-
   return (
     <div
-      className={`
-        min-h-screen px-6 py-10 transition-colors
-        ${theme === "dark" ? "bg-neutral-10 text-neutral-90" : "bg-neutral-98 text-neutral-20"}
-      `}
+      className={`min-h-screen px-6 py-10 transition-colors ${
+        theme === "dark" ? "bg-neutral-10 text-neutral-90" : "bg-neutral-98 text-neutral-20"
+      }`}
     >
       <div className="max-w-5xl mx-auto">
-
-        {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">
             📜 Compare History
           </h1>
-
           {history.length > 0 && (
             <button
               onClick={clearAll}
@@ -97,7 +169,6 @@ const CompareHistory = () => {
           )}
         </div>
 
-        {/* Loading */}
         {loading ? (
           <div className="flex justify-center py-20 text-neutral-50 dark:text-neutral-60">
             Loading history...
@@ -116,89 +187,86 @@ const CompareHistory = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.25 }}
-                  className={`
-                    rounded-2xl border shadow-md p-5 transition
-                    ${theme === "dark"
+                  className={`rounded-2xl border shadow-md p-5 transition ${
+                    theme === "dark"
                       ? "bg-neutral-20 border-neutral-40"
-                      : "bg-white border-neutral-85"}
-                  `}
+                      : "bg-white border-neutral-85"
+                  }`}
                 >
-                  {/* Header */}
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
                       <Trophy size={18} /> Room {entry.roomNumber}
                     </h3>
-
                     <p className="text-xs flex items-center gap-1 opacity-70">
                       <Clock size={14} />
-                      {new Date(entry.createdAt).toLocaleString()}
+                      {entry.createdAt
+                        ? new Date(entry.createdAt).toLocaleString()
+                        : ""}
                     </p>
                   </div>
 
-                  {/* Vehicle list */}
-                  {Array.isArray(entry.vehicles) ? (
-                    <div className="flex gap-4 mb-4">
-                      {entry.vehicles.map((v) => (
+                  <div className="flex gap-4 mb-4">
+                    {entry.vehicles.map((v, idx) => {
+                      const imgSrc =
+                        v.image?.startsWith("http") || v.image?.startsWith("/")
+                          ? v.image
+                          : `http://localhost:5000${v.image || ""}`;
+                      return (
                         <div
-                          key={v._id}
-                          className={`
-                            flex items-center gap-3 p-3 rounded-xl border
-                            ${theme === "dark"
+                          key={idx}
+                          className={`flex items-center gap-3 p-3 rounded-xl border ${
+                            theme === "dark"
                               ? "bg-neutral-30 border-neutral-50"
-                              : "bg-neutral-95 border-neutral-80"}
-                          `}
+                              : "bg-neutral-95 border-neutral-80"
+                          }`}
                         >
                           <img
-                            src={v.image || "/placeholder.jpg"}
+                            src={imgSrc || "/placeholder.jpg"}
+                            alt={v.name || "Vehicle"}
                             className="w-16 h-12 object-cover rounded-lg"
-                            alt={v.name}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "/placeholder.jpg";
+                            }}
                           />
                           <div>
                             <p className="font-semibold">{v.name}</p>
                             <p className="text-xs opacity-70">{v.brand}</p>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm italic opacity-70 mb-4">
-                      (Old entry — No vehicle details stored)
-                    </p>
-                  )}
-
-                  {/* Verdict */}
-                  <div
-                    className={`
-                      rounded-xl flex items-start gap-3 text-sm p-4 mb-3
-                      ${theme === "dark"
-                        ? "bg-blue-900/20 border border-blue-700/40 text-blue-300"
-                        : "bg-blue-600/10 border border-blue-600/40 text-blue-700"}
-                    `}
-                  >
-                    <MessageSquareText size={18} className="mt-0.5" />
-                    <span>{entry.verdict}</span>
+                      );
+                    })}
                   </div>
 
-                  {/* Winner */}
+                  <div
+                    className={`rounded-xl flex items-start gap-3 text-sm p-4 mb-3 ${
+                      theme === "dark"
+                        ? "bg-blue-900/20 border border-blue-700/40 text-blue-300"
+                        : "bg-blue-600/10 border border-blue-600/40 text-blue-700"
+                    }`}
+                  >
+                    <MessageSquareText size={18} className="mt-0.5" />
+                    <span style={{ whiteSpace: "pre-wrap" }}>{entry.verdict}</span>
+                  </div>
+
                   {entry.winnerId && (
                     <p className="text-sm font-semibold text-green-600 dark:text-green-400 mb-3">
                       🏆 Winner:{" "}
-                      {entry.vehicles?.find((v) => v._id === entry.winnerId)?.name ||
-                        "Unknown"}
+                      {
+                        entry.vehicles.find(
+                          (v) => String(v._id) === String(entry.winnerId)
+                        )?.name || "Unknown"
+                      }
                     </p>
                   )}
 
-                  {/* ACTION BUTTONS */}
                   <div className="flex gap-3 mt-4">
-                    {/* View Again */}
                     <button
                       onClick={() => viewAgain(entry)}
                       className="px-4 py-2 rounded-lg bg-blue-600 text-white flex items-center gap-2 hover:bg-blue-700 text-sm"
                     >
                       <Eye size={16} /> View Again
                     </button>
-
-                    {/* Delete */}
                     <button
                       onClick={() => deleteOne(entry._id)}
                       className="px-4 py-2 rounded-lg bg-red-600 text-white flex items-center gap-2 hover:bg-red-700 text-sm"

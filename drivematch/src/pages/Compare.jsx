@@ -63,7 +63,6 @@ const Compare = () => {
         parseNumber(b.performanceScore) - parseNumber(a.performanceScore)
     )[0];
 
-    // Decide overall winner
     const counts = {};
     [bestBudget, bestMileage, bestPerformance].forEach((winner) => {
       if (winner) {
@@ -101,6 +100,10 @@ const Compare = () => {
     ["Body Type", "bodyType"],
   ];
 
+  /* -------------------------------------------------------------
+     FIXED: Save History using /api/compare/save
+     Sends FULL VEHICLE OBJECTS (backend requires this)
+  -------------------------------------------------------------*/
   const saveHistory = async (roomId, vehicles, winners) => {
     try {
       const winnerVehicle = vehicles.find(
@@ -115,15 +118,27 @@ Comparison Result:
 🏆 Overall Winner: ${winnerVehicle?.name}
       `.trim();
 
-      await axios.post("http://localhost:5000/api/compare", {
-        v1: vehicles[0]?._id,
-        v2: vehicles[1]?._id,
+      await axios.post("http://localhost:5000/api/compare/save", {
+        roomNumber: roomId,
         verdict,
+        winnerId: winnerVehicle._id,
+        vehicles: vehicles.map((v) => ({
+          _id: v._id,
+          name: v.name,
+          brand: v.brand,
+          type: v.type,
+          price: v.price,
+          image: v.image,
+          mileage: v.mileage,
+          enginePower: v.enginePower,
+          performanceScore: v.performanceScore,
+          transmission: v.transmission
+        }))
       });
 
       showToast("Comparison saved to history!");
     } catch (err) {
-      console.error(err);
+      console.error("Save history error:", err);
       showToast("Failed to save history", true);
     }
   };
@@ -197,7 +212,6 @@ Comparison Result:
                         }</p>
                       </div>
 
-                      {/* Save History Button */}
                       <button
                         onClick={() =>
                           saveHistory(roomId, vehicles, winners)
@@ -209,7 +223,6 @@ Comparison Result:
                     </div>
                   )}
 
-                  {/* Cards */}
                   <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-6">
                     {vehicles.map((v) => (
                       <div
@@ -246,7 +259,6 @@ Comparison Result:
                     ))}
                   </div>
 
-                  {/* SPEC TABLE */}
                   {vehicles.length > 1 && (
                     <div className="overflow-x-auto border rounded-xl bg-[var(--color-bg)] shadow">
                       <table className="w-full text-sm">
