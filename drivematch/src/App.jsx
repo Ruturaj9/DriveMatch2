@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 // CONTEXT
 import { ThemeProvider } from "./context/ThemeProvider";
 import { CompareProvider } from "./context/CompareProvider";
+import { AuthProvider } from "./context/AuthContext";
 
 // LAYOUT
 import Navbar from "./components/Navbar";
@@ -16,38 +17,57 @@ import CompareHistory from "./pages/CompareHistory";
 import Insights from "./pages/Insights";
 import VehicleDetails from "./pages/VehicleDetails";
 import About from "./pages/About";
-import { AuthProvider } from "./context/AuthContext"; 
 import Login from "./pages/Login";
-import Favorites from "./pages/Favorites"; 
+import Favorites from "./pages/Favorites";
+
+// PROTECTED ROUTE
+import ProtectedRoute from "./components/ProtectedRoute";
 
 
 function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-      <CompareProvider>
-        <BrowserRouter>
+        <CompareProvider>
+          <BrowserRouter>
 
-          {/* GLOBAL NAVBAR */}
-          <Navbar />
+            {/* GLOBAL NAVBAR */}
+            <Navbar />
 
-          {/* ROUTES */}
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/compare" element={<Compare />} />
-            <Route path="/history" element={<CompareHistory />} />
-            <Route path="/insights" element={<Insights />} />
-            <Route path="/vehicle/:id" element={<VehicleDetails />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/favorites" element={<Favorites />} />
-          </Routes>
+            {/* ROUTES */}
+            <Routes>
+              <Route path="/"               element={<Home />} />
+              <Route path="/compare"        element={<Compare />} />
+              <Route path="/insights"       element={<Insights />} />
+              <Route path="/vehicle/:id"    element={<VehicleDetails />} />
+              <Route path="/about"          element={<About />} />
+              <Route path="/login"          element={<Login />} />
 
-          {/* FLOATING AI CHAT ASSISTANT */}
-          <ChatAssistant />
+              {/* ⭐ PROTECTED ROUTES ⭐ */}
+              <Route
+                path="/history"
+                element={
+                  <ProtectedRoute>
+                    <CompareHistory />
+                  </ProtectedRoute>
+                }
+              />
 
-        </BrowserRouter>
-      </CompareProvider>
+              <Route
+                path="/favorites"
+                element={
+                  <ProtectedRoute>
+                    <Favorites />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+
+            {/* FLOATING AI CHAT ASSISTANT */}
+            <ChatAssistant />
+
+          </BrowserRouter>
+        </CompareProvider>
       </AuthProvider>
     </ThemeProvider>
   );

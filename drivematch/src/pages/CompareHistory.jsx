@@ -57,6 +57,7 @@ const CompareHistory = () => {
         const res = await axios.get("http://localhost:5000/api/compare/history", {
           withCredentials: true,
         });
+
         const enriched = await Promise.all(
           res.data.map(async (entry) => {
             const vehicles = await Promise.all(entry.vehicles.map(fetchFullVehicle));
@@ -73,8 +74,15 @@ const CompareHistory = () => {
         });
 
         if (!cancelled) setHistory(deduped);
-      } catch {
-        if (!cancelled) toast("Failed to load history", true);
+      } catch (err) {
+        if (err.response?.status === 401) {
+          toast("You must be logged in to view history.", true);
+          // Optionally redirect:
+          // navigate("/login");
+        } else {
+          toast("Failed to load history", true);
+        }
+        if (!cancelled) setHistory([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
