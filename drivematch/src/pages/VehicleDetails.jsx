@@ -4,13 +4,15 @@ import { useParams } from "react-router-dom";
 import axios from "axios";
 import { motion } from "framer-motion";
 import { CompareContext } from "../context/CompareContext";
+import { AuthContext } from "../context/AuthContext"; // ⭐ added
 import ReviewsSection from "../components/ReviewsSection";
-import { Fuel, Gauge, Settings, Sparkles, Zap } from "lucide-react";
+import { Fuel, Gauge, Settings, Sparkles, Zap, Heart } from "lucide-react";
 import VehicleCard from "../components/VehicleCard";
 
 const VehicleDetails = () => {
   const { id } = useParams();
   const { addVehicleToRoom, rooms } = useContext(CompareContext);
+  const { isAuthenticated, favorites, toggleFavorite } = useContext(AuthContext); // ⭐ added
 
   const [vehicle, setVehicle] = useState(null);
   const [similar, setSimilar] = useState([]);
@@ -18,6 +20,48 @@ const VehicleDetails = () => {
 
   // UI selected room
   const [selectedRoom, setSelectedRoom] = useState("1");
+
+  // ⭐ Toast helper
+  const showToast = (msg, error = false) => {
+    const toast = document.createElement("div");
+    toast.textContent = msg;
+    toast.className = `fixed bottom-6 right-6 px-4 py-2 rounded-lg shadow-lg animate-fade-in-out text-sm z-[9999] ${
+      error ? "bg-red-600" : "bg-blue-600"
+    } text-white`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+  };
+
+  // ⭐ Check if vehicle is favorited (safe if favorites is undefined)
+  const isFav = (vid) =>
+    Array.isArray(favorites) && favorites.some((v) => String(v._id) === String(vid));
+
+  // ⭐ Click handler for favorite button (wired to AuthContext.toggleFavorite)
+  const handleFavorite = async () => {
+    if (!isAuthenticated) {
+      showToast("Login to save favorites", true);
+      return;
+    }
+
+    try {
+      const res = await toggleFavorite(vehicle._id);
+      // toggleFavorite returns { success: boolean, loginRequired?: boolean } in AuthContext
+      if (res?.loginRequired) {
+        showToast("Login required to manage favorites", true);
+        return;
+      }
+      if (res?.success) {
+        // After toggleFavorite, AuthContext.loadFavorites refreshes favorites;
+        // isFav may update shortly after — show a best-effort message.
+        showToast(isFav(vehicle._id) ? "Removed from favorites" : "Added to favorites");
+      } else {
+        showToast("Failed to update favorites", true);
+      }
+    } catch (err) {
+      console.error("Favorite toggle error:", err);
+      showToast("Error updating favorite", true);
+    }
+  };
 
   useEffect(() => {
     const fetch = async () => {
@@ -39,19 +83,7 @@ const VehicleDetails = () => {
     fetch();
   }, [id]);
 
-  // 👉 Toast helper
-  const showToast = (msg, error = false) => {
-    const toast = document.createElement("div");
-    toast.textContent = msg;
-    toast.className =
-      `fixed bottom-6 right-6 px-4 py-2 rounded-lg shadow-lg animate-fade-in-out text-sm z-[9999] ${
-        error ? "bg-red-600" : "bg-blue-600"
-      } text-white`;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2500);
-  };
-
-  // 👉 Add to compare with result handling
+  // Add to compare
   const handleAddToCompare = () => {
     if (!vehicle) return;
 
@@ -60,7 +92,6 @@ const VehicleDetails = () => {
     if (!result.ok) {
       if (result.error === "TYPE_MISMATCH") {
         const existing = rooms[selectedRoom]?.[0]?.type?.toUpperCase() || "Unknown";
-
         showToast(
           `❌ Cannot add. "${vehicle.type}" cannot be compared with "${existing}".`,
           true
@@ -74,15 +105,12 @@ const VehicleDetails = () => {
     showToast(`${vehicle.name} added to Room ${selectedRoom}`);
   };
 
-  // 🖼 fallback image
   const handleImageError = (e) => (e.target.src = "/placeholder.jpg");
 
-  // 🔍 UI helper to check if room is compatible
+  // Room compatibility
   const isRoomCompatible = (roomVehicles) => {
     if (!roomVehicles || roomVehicles.length === 0) return true;
-    return (
-      roomVehicles[0].type?.toLowerCase() === vehicle?.type?.toLowerCase()
-    );
+    return roomVehicles[0].type?.toLowerCase() === vehicle?.type?.toLowerCase();
   };
 
   if (loading)
@@ -102,7 +130,6 @@ const VehicleDetails = () => {
   return (
     <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] py-10 transition-colors">
       <div className="max-w-6xl mx-auto px-6">
-
         {/* IMAGE + MAIN */}
         <motion.div
           initial={{ opacity: 0, y: 25 }}
@@ -139,8 +166,9 @@ const VehicleDetails = () => {
               <Spec icon={Zap} label="Performance" value={vehicle.performanceScore} />
             </div>
 
-            {/* COMPARE SECTION */}
-            <div className="mt-3 flex items-center gap-3">
+            {/* ACTION BUTTONS */}
+            <div className="flex items-center gap-3 mt-4">
+              {/* Compare */}
               <select
                 value={selectedRoom}
                 onChange={(e) => setSelectedRoom(e.target.value)}
@@ -167,6 +195,25 @@ const VehicleDetails = () => {
               >
                 + Add to Compare
               </button>
+
+              {/* ⭐ FAVORITE BUTTON (only show if logged in) */}
+              {isAuthenticated && (
+                <button
+                  onClick={handleFavorite}
+                  className="p-2 rounded-lg border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
+                  aria-label={isFav(vehicle._id) ? "Remove favorite" : "Add favorite"}
+                  title={isFav(vehicle._id) ? "Remove favorite" : "Add favorite"}
+                >
+                  <Heart
+                    size={24}
+                    className={
+                      isFav(vehicle._id)
+                        ? "text-red-500 fill-red-500"
+                        : "text-neutral-500 dark:text-neutral-300"
+                    }
+                  />
+                </button>
+              )}
             </div>
           </div>
         </motion.div>
@@ -274,7 +321,7 @@ const ComparisonTable = ({ vehicle, similar }) => {
                 </td>
 
                 {similar.map((v) => (
-                  <td key={v._id} className="py-3 px-4">
+                  <td key={v._1d} className="py-3 px-4">
                     {format ? format(v[key]) : v[key] || "N/A"}
                   </td>
                 ))}

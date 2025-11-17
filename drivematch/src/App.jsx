@@ -16,10 +16,15 @@ import CompareHistory from "./pages/CompareHistory";
 import Insights from "./pages/Insights";
 import VehicleDetails from "./pages/VehicleDetails";
 import About from "./pages/About";
+import { AuthProvider } from "./context/AuthContext"; 
+import Login from "./pages/Login";
+import Favorites from "./pages/Favorites"; 
+
 
 function App() {
   return (
     <ThemeProvider>
+      <AuthProvider>
       <CompareProvider>
         <BrowserRouter>
 
@@ -34,6 +39,8 @@ function App() {
             <Route path="/insights" element={<Insights />} />
             <Route path="/vehicle/:id" element={<VehicleDetails />} />
             <Route path="/about" element={<About />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/favorites" element={<Favorites />} />
           </Routes>
 
           {/* FLOATING AI CHAT ASSISTANT */}
@@ -41,6 +48,7 @@ function App() {
 
         </BrowserRouter>
       </CompareProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

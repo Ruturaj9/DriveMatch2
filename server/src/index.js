@@ -3,10 +3,13 @@ import cors from "cors";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 
+// Routes
 import vehicleRoutes from "./routes/vehicleRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import advisorRoutes from "./routes/advisorRoutes.js";
 import compareRoutes from "./routes/compareRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
+import favoriteRoutes from "./routes/favoriteRoutes.js";
 
 dotenv.config(); // Load .env
 
@@ -25,6 +28,8 @@ app.use("/api/vehicles", vehicleRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/advisor", advisorRoutes);
 app.use("/api/compare", compareRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/favorites", favoriteRoutes);
 
 // 4️⃣ Test Route
 app.get("/", (req, res) => {
